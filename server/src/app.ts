@@ -5,6 +5,7 @@ import { createAuthRouter } from "./routes/authRoutes.js";
 import { createSearchRouter } from "./routes/searchRoutes.js";
 import { createCollectionRouter } from "./routes/collectionRoutes.js";
 import { createMovieRouter } from "./routes/movieRoutes.js";
+import { createListRouter } from "./routes/listRoutes.js";
 
 export interface AppOptions {
   clientDistDir?: string;
@@ -19,6 +20,7 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use("/api/search", createSearchRouter(db, tmdb));
   app.use("/api/collection", createCollectionRouter(db, tmdb));
   app.use("/api/movies", createMovieRouter(db));
+  app.use("/api/lists", createListRouter(db));
 
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Unbekannter API-Endpunkt" });
