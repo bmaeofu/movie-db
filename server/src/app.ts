@@ -1,4 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import fs from "node:fs";
+import path from "node:path";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "./tmdb.js";
 import { createAuthRouter } from "./routes/authRoutes.js";
@@ -25,6 +27,14 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Unbekannter API-Endpunkt" });
   });
+
+  const distDir = options.clientDistDir;
+  if (distDir && fs.existsSync(distDir)) {
+    app.use(express.static(distDir));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(distDir, "index.html"));
+    });
+  }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof SyntaxError && "status" in err && (err as { status?: number }).status === 400) {
