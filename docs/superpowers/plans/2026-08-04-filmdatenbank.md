@@ -3174,7 +3174,7 @@ npm run dev -w client                       # Terminal 2
 
 ```bash
 npm test            # Backend (Vitest + supertest)
-# E2E-Smoke: siehe e2e/README-Notiz im Plan (Task 13)
+# E2E-Smoke-Test: e2e/ Verzeichnis, Ausführung siehe Implementierungsplan Task 13
 ```
 
 ## Daten & Backup
