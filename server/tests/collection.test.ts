@@ -55,7 +55,7 @@ describe("Sammlung", () => {
     expect(res2.status).toBe(400);
   });
 
-  it.skip("listet alle Filme mit Durchschnitt und eigenen Daten", async () => {
+  it("listet alle Filme mit Durchschnitt und eigenen Daten", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/27205/rating").set("Cookie", benCookie).send({ sterne: 4 });
     const res = await request(app).get("/api/collection").set("Cookie", annaCookie);
@@ -68,7 +68,7 @@ describe("Sammlung", () => {
     expect(inception.my_list_ids).toEqual([]);
   });
 
-  it.skip("filtert nach Genre, Medientyp und Status", async () => {
+  it("filtert nach Genre, Medientyp und Status", async () => {
     await request(app).put("/api/movies/27205/watch-status").set("Cookie", annaCookie).send({ status: "gesehen" });
     const genre = await request(app).get("/api/collection?genre=Action").set("Cookie", annaCookie);
     expect(genre.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
@@ -78,8 +78,9 @@ describe("Sammlung", () => {
     expect(status.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
   });
 
-  it.skip("sortiert nach Bewertung absteigend", async () => {
+  it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
+    await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });
     await request(app).put("/api/movies/1399/rating").set("Cookie", annaCookie).send({ sterne: 1 });
     const res = await request(app).get("/api/collection?sort=bewertung").set("Cookie", annaCookie);
     expect(res.body[0].tmdb_id).toBe(27205);
