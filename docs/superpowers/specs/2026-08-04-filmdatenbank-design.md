@@ -71,6 +71,7 @@ Regeln:
 - Film-Metadaten sind global (ein `movies`-Eintrag pro TMDB-Film); Nutzerdaten (Bewertung, Status, Notiz) sind pro Nutzer.
 - Der erste angelegte Nutzer wird Admin; Admins legen weitere Nutzer an (Name + Passwort).
 - Fremdschlüssel mit `ON DELETE CASCADE` für ratings/watch_status/notes/list_items.
+- `collection.added_by`: nullable + `ON DELETE SET NULL` (Filme bleiben bei User-Löschung erhalten).
 
 ## 5. API
 

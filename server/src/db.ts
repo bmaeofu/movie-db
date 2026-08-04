@@ -24,7 +24,7 @@ export function initSchema(db: Database.Database): void {
     );
     CREATE TABLE IF NOT EXISTS collection (
       tmdb_id INTEGER PRIMARY KEY REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-      added_by INTEGER NOT NULL REFERENCES users(id),
+      added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       added_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS ratings (

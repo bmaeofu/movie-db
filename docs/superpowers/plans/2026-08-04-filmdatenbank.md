@@ -203,6 +203,9 @@ playwright-report/
 `server/tests/db.test.ts`:
 ```ts
 import { describe, expect, it } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createDb, initSchema } from "../src/db.js";
 
 describe("Datenbankschema", () => {
@@ -220,6 +223,27 @@ describe("Datenbankschema", () => {
   it("ist idempotent (mehrfaches initSchema wirft nicht)", () => {
     const db = createDb(":memory:");
     expect(() => initSchema(db)).not.toThrow();
+  });
+
+  it("aktiviert WAL und Foreign Keys", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "fdb-"));
+    const db = createDb(path.join(dir, "test.db"));
+    expect(db.pragma("journal_mode", { simple: true })).toBe("wal");
+    expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
+  });
+
+  it("durchsetzt die CHECK-Constraints", () => {
+    const db = createDb(":memory:");
+    const userId = Number(
+      db.prepare("INSERT INTO users (name, password_hash) VALUES ('Anna', 'x')").run().lastInsertRowid
+    );
+    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (27205, 'Inception', 'film', '{}')").run();
+    expect(() =>
+      db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (1, 'X', 'doku', '{}')").run()
+    ).toThrow(/CHECK constraint failed/);
+    expect(() =>
+      db.prepare("INSERT INTO ratings (user_id, tmdb_id, sterne) VALUES (?, 27205, 6)").run(userId)
+    ).toThrow(/CHECK constraint failed/);
   });
 });
 ```
@@ -258,7 +282,7 @@ export function initSchema(db: Database.Database): void {
     );
     CREATE TABLE IF NOT EXISTS collection (
       tmdb_id INTEGER PRIMARY KEY REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-      added_by INTEGER NOT NULL REFERENCES users(id),
+      added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       added_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS ratings (
@@ -1125,7 +1149,7 @@ export interface MovieView {
 
 /**
  * Movie-Select mit Nutzerdaten.
- * `fromSql` ersetzt die Quelle (z. B. `FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = c.added_by`
+ * `fromSql` ersetzt die Quelle (z. B. `FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by`
  * oder `FROM list_items c JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = <added_by-Subquery>`),
  * `extraWhere`/`params` steuern Filter, `orderBy` die Sortierung.
  */
@@ -1264,7 +1288,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
       const rows = listMovieViews(
         db,
         userId,
-        "FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = c.added_by",
+        "FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by",
         where,
         params,
         orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt

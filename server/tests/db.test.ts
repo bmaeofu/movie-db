@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createDb, initSchema } from "../src/db.js";
 
 describe("Datenbankschema", () => {
@@ -16,5 +19,26 @@ describe("Datenbankschema", () => {
   it("ist idempotent (mehrfaches initSchema wirft nicht)", () => {
     const db = createDb(":memory:");
     expect(() => initSchema(db)).not.toThrow();
+  });
+
+  it("aktiviert WAL und Foreign Keys", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "fdb-"));
+    const db = createDb(path.join(dir, "test.db"));
+    expect(db.pragma("journal_mode", { simple: true })).toBe("wal");
+    expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
+  });
+
+  it("durchsetzt die CHECK-Constraints", () => {
+    const db = createDb(":memory:");
+    const userId = Number(
+      db.prepare("INSERT INTO users (name, password_hash) VALUES ('Anna', 'x')").run().lastInsertRowid
+    );
+    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (27205, 'Inception', 'film', '{}')").run();
+    expect(() =>
+      db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (1, 'X', 'doku', '{}')").run()
+    ).toThrow(/CHECK constraint failed/);
+    expect(() =>
+      db.prepare("INSERT INTO ratings (user_id, tmdb_id, sterne) VALUES (?, 27205, 6)").run(userId)
+    ).toThrow(/CHECK constraint failed/);
   });
 });
