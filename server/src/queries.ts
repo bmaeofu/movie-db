@@ -38,12 +38,13 @@ export function listMovieViews(
       `SELECT m.tmdb_id, m.titel, m.jahr, m.medientyp, m.genres, m.poster_url, m.overview,
               c.added_at, u.name AS added_by_name,
               ROUND(AVG(r.sterne), 1) AS avg_rating, COUNT(r.user_id) AS rating_count,
-              r.sterne AS my_rating, ws.status AS my_status, n.text AS my_note,
+              (SELECT sterne FROM ratings WHERE tmdb_id = m.tmdb_id AND user_id = @userId) AS my_rating,
+              ws.status AS my_status, n.text AS my_note,
               (SELECT json_group_array(list_id) FROM list_items
                WHERE tmdb_id = m.tmdb_id
                  AND list_id IN (SELECT id FROM lists WHERE owner_id = @userId)) AS my_list_ids
        ${fromSql}
-       LEFT JOIN ratings r ON r.tmdb_id = m.tmdb_id AND r.user_id = @userId
+       LEFT JOIN ratings r ON r.tmdb_id = m.tmdb_id
        LEFT JOIN watch_status ws ON ws.tmdb_id = m.tmdb_id AND ws.user_id = @userId
        LEFT JOIN notes n ON n.tmdb_id = m.tmdb_id AND n.user_id = @userId
        ${where}
