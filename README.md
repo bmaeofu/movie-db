@@ -59,4 +59,4 @@ Voraussetzung: frische Datenbank (Volume leeren oder neuen Stack mit frischem Vo
 ## Daten & Backup
 
 Die Datenbank liegt im Docker-Volume `fdb-data` (`/data/filmdatenbank.db`).
-Backup: `docker compose cp filmdatenbank:/data/filmdatenbank.db ./backup.db`
+Backup: `docker compose cp movie-db:/data/filmdatenbank.db ./backup.db`
