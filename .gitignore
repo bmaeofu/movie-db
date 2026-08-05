@@ -8,3 +8,6 @@ data/
 *.db-shm
 test-results/
 playwright-report/
+
+# Agent-Scratch (Ledger, Briefs, Review-Pakete)
+.superpowers/
