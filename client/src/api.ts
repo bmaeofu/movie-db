@@ -20,7 +20,7 @@ export interface Movie extends SearchResult {
   avg_rating: number | null;
   rating_count: number;
   my_rating: number | null;
-  my_status: "schauen" | "gesehen" | "kein_interesse" | null;
+  my_status: "neu" | "schauen" | "gesehen" | "kein_interesse" | null;
   my_note: string | null;
   my_list_ids: number[];
   land: string[];

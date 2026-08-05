@@ -93,6 +93,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         JSON.stringify((cast as { name: string; rolle: string }[]) ?? [])
       );
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(newId, user.id);
+      // Neu aufgenommen → Status 'neu' für ALLE Benutzer
+      db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(newId);
       res.status(201).json({ message: "Zur Sammlung hinzugefügt", tmdb_id: newId });
     })
   );
@@ -164,6 +166,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       });
       const user = (req as AuthedRequest).user;
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);
+      // Neu aufgenommen → Status 'neu' für ALLE Benutzer (bestehende Status bleiben erhalten)
+      db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(tmdb_id);
       res.status(201).json({ message: "Zur Sammlung hinzugefügt" });
     })
   );

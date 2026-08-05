@@ -91,6 +91,26 @@ describe("Sammlung", () => {
     expect(after.n).toBe(3);
   });
 
+  it("neu aufgenommene Filme bekommen Status 'neu' für ALLE Benutzer", async () => {
+    const res = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 1234, medientyp: "film" });
+    expect(res.status).toBe(201);
+    const rows = db
+      .prepare("SELECT u.name, ws.status FROM watch_status ws JOIN users u ON u.id = ws.user_id WHERE ws.tmdb_id = 1234 ORDER BY u.name")
+      .all() as { name: string; status: string }[];
+    expect(rows.map((r) => r.status)).toEqual(["neu", "neu"]); // Anna + Ben
+    expect(rows).toHaveLength(2);
+    // bestehender Status bleibt erhalten (OR IGNORE): Ben setzt gesehen, Film erneut hinzufügen geht nicht (200),
+    // daher: Anna markiert gesehen und löscht, Ben fügt neu hinzu → Annas gesehen bleibt
+    await request(app).put("/api/movies/1234/rating").set("Cookie", annaCookie).send({ sterne: 4 });
+    await request(app).put("/api/movies/1234/watch-status").set("Cookie", annaCookie).send({ status: "gesehen" });
+    await request(app).delete("/api/collection/1234").set("Cookie", annaCookie);
+    await request(app).post("/api/collection").set("Cookie", benCookie).send({ tmdb_id: 1234, medientyp: "film" });
+    const annaStatus = db.prepare("SELECT status FROM watch_status WHERE user_id = (SELECT id FROM users WHERE name='Anna') AND tmdb_id = 1234").get() as { status: string };
+    const benStatus = db.prepare("SELECT status FROM watch_status WHERE user_id = (SELECT id FROM users WHERE name='Ben') AND tmdb_id = 1234").get() as { status: string };
+    expect(annaStatus.status).toBe("gesehen");
+    expect(benStatus.status).toBe("neu");
+  });
+
   it("validiert tmdb_id und medientyp", async () => {
     const res1 = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: "x", medientyp: "film" });
     expect(res1.status).toBe(400);

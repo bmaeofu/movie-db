@@ -84,6 +84,7 @@ export default function CollectionPage() {
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Jeder Status</option>
+          <option value="neu">Neu</option>
           <option value="schauen">Schauen</option>
           <option value="gesehen">Gesehen</option>
           <option value="kein_interesse">Kein Interesse</option>

@@ -69,11 +69,13 @@ describe("Bewertung, Status, Notizen", () => {
   it("Watch-Status: gültige Werte, UPSERT", async () => {
     const resBad = await request(app).put("/api/movies/27205/watch-status").set("Cookie", annaCookie).send({ status: "vielleicht" });
     expect(resBad.status).toBe(400);
+    await request(app).put("/api/movies/27205/watch-status").set("Cookie", annaCookie).send({ status: "neu" });
     await request(app).put("/api/movies/27205/watch-status").set("Cookie", annaCookie).send({ status: "gesehen" });
-    await request(app).put("/api/movies/27205/watch-status").set("Cookie", annaCookie).send({ status: "schauen" });
-    const rows = db.prepare("SELECT * FROM watch_status").all();
+    const rows = db
+      .prepare("SELECT * FROM watch_status WHERE user_id = (SELECT id FROM users WHERE name='Anna')")
+      .all();
     expect(rows).toHaveLength(1);
-    expect((rows[0] as any).status).toBe("schauen");
+    expect((rows[0] as any).status).toBe("gesehen");
   });
 
   it("Bewertung/Status/Notiz für unbekannte tmdb_id → 404", async () => {

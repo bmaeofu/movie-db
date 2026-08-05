@@ -32,6 +32,27 @@ describe("Datenbankschema", () => {
     }
   });
 
+  it("migriert watch_status-CHECK um 'neu' und erhält Bestandsdaten", () => {
+    const db = createDb(":memory:");
+    db.exec(`
+      DROP TABLE watch_status;
+      CREATE TABLE watch_status (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('schauen','gesehen','kein_interesse')),
+        PRIMARY KEY (user_id, tmdb_id)
+      );
+    `);
+    const uid = Number(db.prepare("INSERT INTO users (name, password_hash) VALUES ('A', 'x')").run().lastInsertRowid);
+    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (1, 'X', 'film', '{}')").run();
+    db.prepare("INSERT INTO watch_status (user_id, tmdb_id, status) VALUES (?, 1, 'gesehen')").run(uid);
+    initSchema(db);
+    const row = db.prepare("SELECT status FROM watch_status WHERE user_id = ? AND tmdb_id = 1").get(uid) as { status: string };
+    expect(row.status).toBe("gesehen"); // Daten erhalten
+    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (2, 'Y', 'film', '{}')").run();
+    expect(() => db.prepare("INSERT INTO watch_status (user_id, tmdb_id, status) VALUES (?, 2, 'neu')").run(uid)).not.toThrow();
+  });
+
   it("aktiviert WAL und Foreign Keys", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "fdb-"));
     const db = createDb(path.join(dir, "test.db"));

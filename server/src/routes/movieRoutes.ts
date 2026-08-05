@@ -2,7 +2,7 @@ import { Router } from "express";
 import type Database from "better-sqlite3";
 import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 
-const STATUS_VALUES = ["schauen", "gesehen", "kein_interesse"] as const;
+const STATUS_VALUES = ["neu", "schauen", "gesehen", "kein_interesse"] as const;
 
 export function createMovieRouter(db: Database.Database): Router {
   const router = Router();
@@ -37,7 +37,7 @@ export function createMovieRouter(db: Database.Database): Router {
       const tmdbId = Number(req.params.tmdbId);
       const status = (req.body ?? {}).status;
       if (!Number.isInteger(tmdbId) || !STATUS_VALUES.includes(status)) {
-        res.status(400).json({ error: "status ('schauen'|'gesehen'|'kein_interesse') erforderlich" });
+        res.status(400).json({ error: "status ('neu'|'schauen'|'gesehen'|'kein_interesse') erforderlich" });
         return;
       }
       const movieExists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?").get(tmdbId);

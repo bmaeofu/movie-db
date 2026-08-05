@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, type ListSummary, type Movie } from "../api";
 
-const STATUS_OPTIONS: Array<["schauen" | "gesehen" | "kein_interesse", string]> = [
+const STATUS_OPTIONS: Array<["neu" | "schauen" | "gesehen" | "kein_interesse", string]> = [
+  ["neu", "Neu"],
   ["schauen", "Schauen"],
   ["gesehen", "Gesehen"],
   ["kein_interesse", "Kein Interesse"],
