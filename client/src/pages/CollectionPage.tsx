@@ -12,6 +12,8 @@ export default function CollectionPage() {
   const [land, setLand] = useState("");
   const [regisseur, setRegisseur] = useState("");
   const [jahr, setJahr] = useState("");
+  const [tmdbMin, setTmdbMin] = useState("");
+  const [imdbMin, setImdbMin] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
@@ -31,12 +33,14 @@ export default function CollectionPage() {
     if (land) filters.land = land;
     if (regisseur) filters.regisseur = regisseur;
     if (jahr) filters.jahr = jahr;
+    if (tmdbMin) filters.tmdb_min = tmdbMin;
+    if (imdbMin) filters.imdb_min = imdbMin;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
     const fresh = await api.collection(filters);
     setMovies(fresh);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, jahr, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, jahr, tmdbMin, imdbMin, medientyp, status, sort]);
 
   useEffect(() => {
     void load();
@@ -75,6 +79,18 @@ export default function CollectionPage() {
           <option value="">Alle Jahre</option>
           {facets.jahre.map((y) => (
             <option key={y} value={String(y)}>{y}</option>
+          ))}
+        </select>
+        <select value={tmdbMin} onChange={(e) => setTmdbMin(e.target.value)}>
+          <option value="">TMDb egal</option>
+          {[8, 7.5, 7, 6.5, 6].map((v) => (
+            <option key={v} value={String(v)}>TMDb ≥ {v.toFixed(1).replace(".0", "")}</option>
+          ))}
+        </select>
+        <select value={imdbMin} onChange={(e) => setImdbMin(e.target.value)}>
+          <option value="">IMDb egal</option>
+          {[8, 7.5, 7, 6.5, 6].map((v) => (
+            <option key={v} value={String(v)}>IMDb ≥ {v.toFixed(1).replace(".0", "")}</option>
           ))}
         </select>
         <select value={medientyp} onChange={(e) => setMedientyp(e.target.value)}>

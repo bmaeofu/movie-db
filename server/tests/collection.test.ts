@@ -173,6 +173,16 @@ describe("Sammlung", () => {
     expect(facets.body.jahre).toContain(2011); // Game of Thrones
   });
 
+  it("filtert nach Mindestbewertung (TMDb/IMDb)", async () => {
+    db.prepare("UPDATE movies SET tmdb_bewertung = 8.1, imdb_bewertung = 8.6 WHERE tmdb_id = 27205").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 6.4, imdb_bewertung = 6.1 WHERE tmdb_id = 157336").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 8.3, imdb_bewertung = NULL WHERE tmdb_id = 1399").run();
+    const tmdb = await request(app).get("/api/collection?tmdb_min=8").set("Cookie", annaCookie);
+    expect(tmdb.body.map((m: any) => m.tmdb_id).sort()).toEqual([1399, 27205]);
+    const imdb = await request(app).get("/api/collection?imdb_min=8").set("Cookie", annaCookie);
+    expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
+  });
+
   it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });

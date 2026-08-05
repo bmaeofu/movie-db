@@ -182,6 +182,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       const land = typeof req.query.land === "string" ? req.query.land.trim() : "";
       const regisseur = typeof req.query.regisseur === "string" ? req.query.regisseur.trim() : "";
       const jahrParam = typeof req.query.jahr === "string" ? req.query.jahr.trim() : "";
+      const tmdbMin = Number(req.query.tmdb_min);
+      const imdbMin = Number(req.query.imdb_min);
       const medientyp = typeof req.query.medientyp === "string" ? req.query.medientyp : "";
       const status = typeof req.query.status === "string" ? req.query.status : "";
       const sort = typeof req.query.sort === "string" ? req.query.sort : "zuletzt_hinzugefuegt";
@@ -214,6 +216,14 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       if (jahrParam !== "" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100) {
         where.push("m.jahr = @jahr");
         params.jahr = jahr;
+      }
+      if (Number.isFinite(tmdbMin) && tmdbMin >= 0 && tmdbMin <= 10) {
+        where.push("m.tmdb_bewertung >= @tmdbMin");
+        params.tmdbMin = tmdbMin;
+      }
+      if (Number.isFinite(imdbMin) && imdbMin >= 0 && imdbMin <= 10) {
+        where.push("m.imdb_bewertung >= @imdbMin");
+        params.imdbMin = imdbMin;
       }
       if (medientyp === "film" || medientyp === "serie") {
         where.push("m.medientyp = @medientyp");
