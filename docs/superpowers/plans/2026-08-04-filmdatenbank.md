@@ -27,7 +27,7 @@
 ## File Structure
 
 ```
-Filme_und_Serien_Auswahl/
+movie-db/
 ├── package.json                  # Workspace-Root, Scripts, devDep concurrently
 ├── package-lock.json             # nach erstem npm install
 ├── .gitignore
