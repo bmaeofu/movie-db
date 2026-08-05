@@ -1,23 +1,26 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
+import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
 
-export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient): Router {
+export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db));
 
   const upsertMovie = db.prepare(
     `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                        land, regisseure, autoren, "cast")
+                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung)
      VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
-             @land, @regisseure, @autoren, @cast)
+             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung)
      ON CONFLICT(tmdb_id) DO UPDATE SET
        titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
        genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
        tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
-       autoren = excluded.autoren, "cast" = excluded.cast, zuletzt_aktualisiert = datetime('now')`
+       autoren = excluded.autoren, "cast" = excluded.cast, tmdb_bewertung = excluded.tmdb_bewertung,
+       tmdb_stimmen = excluded.tmdb_stimmen, imdb_bewertung = excluded.imdb_bewertung,
+       zuletzt_aktualisiert = datetime('now')`
   );
 
   router.post(
@@ -114,6 +117,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
         return;
       }
+      const imdb_bewertung = omdb ? await omdb.rating(movie.imdb_id) : null;
       upsertMovie.run({
         tmdb_id: movie.tmdb_id,
         titel: movie.titel,
@@ -127,6 +131,9 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         regisseure: JSON.stringify(movie.regisseure),
         autoren: JSON.stringify(movie.autoren),
         cast: JSON.stringify(movie.cast),
+        tmdb_bewertung: movie.tmdb_bewertung,
+        tmdb_stimmen: movie.tmdb_stimmen,
+        imdb_bewertung,
       });
       const user = (req as AuthedRequest).user;
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);

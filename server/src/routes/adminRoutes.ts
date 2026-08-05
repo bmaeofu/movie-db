@@ -1,14 +1,16 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
+import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, requireAdmin, requireAuth } from "../middleware.js";
 
-export function createAdminRouter(db: Database.Database, tmdb: TmdbClient): Router {
+export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db), requireAdmin);
 
   const updateEnriched = db.prepare(
-    `UPDATE movies SET land = ?, regisseure = ?, autoren = ?, "cast" = ?, zuletzt_aktualisiert = datetime('now')
+    `UPDATE movies SET land = ?, regisseure = ?, autoren = ?, "cast" = ?, tmdb_bewertung = ?, tmdb_stimmen = ?,
+     imdb_bewertung = ?, zuletzt_aktualisiert = datetime('now')
      WHERE tmdb_id = ?`
   );
 
@@ -32,11 +34,15 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient): Rout
       for (const row of rows) {
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
+          const imdb_bewertung = omdb ? await omdb.rating(m.imdb_id) : null;
           updateEnriched.run(
             JSON.stringify(m.land),
             JSON.stringify(m.regisseure),
             JSON.stringify(m.autoren),
             JSON.stringify(m.cast),
+            m.tmdb_bewertung,
+            m.tmdb_stimmen,
+            imdb_bewertung,
             row.tmdb_id
           );
           updated.push(row.tmdb_id);

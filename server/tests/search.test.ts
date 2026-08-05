@@ -131,6 +131,9 @@ describe("TMDB-Details-Anreicherung", () => {
           genres: [],
           poster_path: "/x.jpg",
           overview: "o",
+          vote_average: 8.37,
+          vote_count: 37000,
+          imdb_id: "tt1375666",
           production_countries: [{ iso_3166_1: "DE", name: "Germany" }],
           credits: {
             crew: [
@@ -151,5 +154,8 @@ describe("TMDB-Details-Anreicherung", () => {
     expect(m.regisseure).toEqual(["Christopher Nolan"]);
     expect(m.autoren).toEqual(["Christopher Nolan", "Jonathan Nolan"]);
     expect(m.cast).toEqual([{ name: "Leonardo DiCaprio", rolle: "Cobb" }]);
+    expect(m.imdb_id).toBe("tt1375666");
+    expect(m.tmdb_bewertung).toBe(8.4);
+    expect(m.tmdb_stimmen).toBe(37000);
   });
 });

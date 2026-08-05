@@ -54,6 +54,15 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
         <h2>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h2>
         {movie.overview && <p className="overview">{movie.overview}</p>}
         <p className="genres">{movie.genres.join(", ")}</p>
+        {(movie.tmdb_bewertung !== null || movie.imdb_bewertung !== null) && (
+          <p className="genres">
+            {movie.tmdb_bewertung !== null && (
+              <span>TMDB: {movie.tmdb_bewertung.toFixed(1)}{movie.tmdb_stimmen ? ` (${movie.tmdb_stimmen.toLocaleString("de-DE")} Stimmen)` : ""}</span>
+            )}
+            {movie.tmdb_bewertung !== null && movie.imdb_bewertung !== null && " · "}
+            {movie.imdb_bewertung !== null && <span>IMDb: {movie.imdb_bewertung.toFixed(1)}</span>}
+          </p>
+        )}
         {movie.land.length > 0 && <p className="genres">Land: {movie.land.join(", ")}</p>}
         {movie.regisseure.length > 0 && <p className="genres">Regie: {movie.regisseure.join(", ")}</p>}
         {movie.autoren.length > 0 && <p className="genres">Autoren: {movie.autoren.join(", ")}</p>}

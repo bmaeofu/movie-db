@@ -6,9 +6,9 @@ import { createDb } from "../src/db.js";
 import type { TmdbClient, TmdbMovie } from "../src/tmdb.js";
 
 const filme: Record<number, TmdbMovie> = {
-  27205: { tmdb_id: 27205, titel: "Inception", jahr: 2010, medientyp: "film", genres: ["Action"], poster_url: null, overview: "Traum", land: [], regisseure: [], autoren: [], cast: [] },
-  157336: { tmdb_id: 157336, titel: "Interstellar", jahr: 2014, medientyp: "film", genres: ["Science Fiction"], poster_url: null, overview: "Wurmloch", land: [], regisseure: [], autoren: [], cast: [] },
-  1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen", land: [], regisseure: [], autoren: [], cast: [] },
+  27205: { tmdb_id: 27205, titel: "Inception", jahr: 2010, medientyp: "film", genres: ["Action"], poster_url: null, overview: "Traum", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
+  157336: { tmdb_id: 157336, titel: "Interstellar", jahr: 2014, medientyp: "film", genres: ["Science Fiction"], poster_url: null, overview: "Wurmloch", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
+  1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
 };
 
 const fakeTmdb: TmdbClient = {

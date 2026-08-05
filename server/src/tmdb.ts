@@ -10,6 +10,9 @@ export interface TmdbMovie {
   regisseure: string[];
   autoren: string[];
   cast: { name: string; rolle: string }[];
+  imdb_id: string | null;
+  tmdb_bewertung: number | null;
+  tmdb_stimmen: number;
 }
 
 export interface TmdbClient {
@@ -106,6 +109,9 @@ export function createTmdbClient(options: {
       regisseure: [],
       autoren: [],
       cast: [],
+      imdb_id: raw.imdb_id ?? null,
+      tmdb_bewertung: typeof raw.vote_average === "number" ? Math.round(raw.vote_average * 10) / 10 : null,
+      tmdb_stimmen: typeof raw.vote_count === "number" ? raw.vote_count : 0,
     };
   }
 

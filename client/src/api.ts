@@ -27,6 +27,9 @@ export interface Movie extends SearchResult {
   regisseure: string[];
   autoren: string[];
   cast: { name: string; rolle: string }[];
+  tmdb_bewertung: number | null;
+  tmdb_stimmen: number | null;
+  imdb_bewertung: number | null;
 }
 
 export interface ListSummary {

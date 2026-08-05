@@ -19,6 +19,9 @@ const fakeTmdb: TmdbClient = {
     regisseure: [],
     autoren: [],
     cast: [],
+    imdb_id: null,
+    tmdb_bewertung: null,
+    tmdb_stimmen: 0,
   }),
 };
 

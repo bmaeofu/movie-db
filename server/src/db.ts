@@ -20,6 +20,9 @@ export function initSchema(db: Database.Database): void {
       poster_url TEXT,
       overview TEXT,
       tmdb_json TEXT NOT NULL,
+      tmdb_bewertung REAL,
+      tmdb_stimmen INTEGER,
+      imdb_bewertung REAL,
       zuletzt_aktualisiert TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS collection (
@@ -75,6 +78,9 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "regisseure", "regisseure TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "movies", "autoren", "autoren TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "movies", "cast", "cast TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "movies", "tmdb_bewertung", "tmdb_bewertung REAL");
+  ensureColumn(db, "movies", "tmdb_stimmen", "tmdb_stimmen INTEGER");
+  ensureColumn(db, "movies", "imdb_bewertung", "imdb_bewertung REAL");
 }
 
 /** Fügt eine Spalte hinzu, falls sie fehlt (Migration für Bestands-DBs). */
