@@ -6,6 +6,7 @@ services:
       - "8080:3000"
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
+      - OMDB_API_KEY=${OMDB_API_KEY}
     volumes:
       - /mnt/user/appdata/movie-db:/data
     restart: unless-stopped
