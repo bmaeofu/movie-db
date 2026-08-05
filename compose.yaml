@@ -7,8 +7,5 @@ services:
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
     volumes:
-      - fdb-data:/data
+      - /mnt/user/appdata/movie-db:/data
     restart: unless-stopped
-
-volumes:
-  fdb-data:

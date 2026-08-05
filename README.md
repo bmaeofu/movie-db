@@ -58,5 +58,8 @@ Voraussetzung: frische Datenbank (Volume leeren oder neuen Stack mit frischem Vo
 
 ## Daten & Backup
 
-Die Datenbank liegt im Docker-Volume `fdb-data` (`/data/filmdatenbank.db`).
-Backup: `docker compose cp movie-db:/data/filmdatenbank.db ./backup.db`
+Die Datenbank liegt als Datei unter `/mnt/user/appdata/movie-db/filmdatenbank.db` (Bind-Mount auf `/data` im Container) – direkt im unRAID-appdata-Share sichtbar.
+Backup: Datei einfach kopieren (`appdata/movie-db/filmdatenbank.db`) oder im laufenden Container:
+`docker compose cp movie-db:/data/filmdatenbank.db ./backup.db`
+
+Für eine frische Datenbank: Container stoppen, `appdata/movie-db/filmdatenbank.db*` löschen, wieder starten.
