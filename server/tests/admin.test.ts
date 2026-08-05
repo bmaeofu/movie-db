@@ -77,4 +77,24 @@ describe("Admin-Backfill", () => {
     const second = await request(app).post("/api/admin/backfill").set("Cookie", adminCookie);
     expect(second.body.updated).toBe(0); // idempotent
   });
+
+  it("omdb_limit begrenzt die OMDb-Aufrufe (imdb_bewertung bleibt null)", async () => {
+    enriched = true;
+    const res = await request(app).post("/api/admin/backfill?omdb_limit=0").set("Cookie", adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.updated).toBe(1); // TMDB-Daten werden trotzdem angereichert
+    const row = db.prepare('SELECT imdb_bewertung FROM movies WHERE tmdb_id = 27205').get() as { imdb_bewertung: number | null };
+    expect(row.imdb_bewertung).toBeNull(); // kein OMDb-Aufruf
+  });
+
+  it("skip_omdb beim Hinzufügen lässt imdb_bewertung leer", async () => {
+    enriched = true;
+    const res = await request(app)
+      .post("/api/collection?skip_omdb=1")
+      .set("Cookie", adminCookie)
+      .send({ tmdb_id: 157336, medientyp: "film" });
+    expect(res.status).toBe(201);
+    const row = db.prepare('SELECT imdb_bewertung FROM movies WHERE tmdb_id = 157336').get() as { imdb_bewertung: number | null };
+    expect(row.imdb_bewertung).toBeNull();
+  });
 });

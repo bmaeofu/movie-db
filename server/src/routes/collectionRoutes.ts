@@ -117,7 +117,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
         return;
       }
-      const imdb_bewertung = omdb ? await omdb.rating(movie.imdb_id) : null;
+      const imdb_bewertung = omdb && req.query.skip_omdb !== "1" ? await omdb.rating(movie.imdb_id) : null;
       upsertMovie.run({
         tmdb_id: movie.tmdb_id,
         titel: movie.titel,

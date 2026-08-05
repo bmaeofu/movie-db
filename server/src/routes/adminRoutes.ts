@@ -22,19 +22,23 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     "/backfill",
     asyncHandler(async (req, res) => {
       const force = req.query.force === "1";
+      const omdbLimit = Number(req.query.omdb_limit) || Infinity;
       const rows = db
         .prepare(
           force
-            ? "SELECT tmdb_id, medientyp, land FROM movies WHERE tmdb_id > 0"
-            : "SELECT tmdb_id, medientyp, land FROM movies WHERE tmdb_id > 0 AND land = '[]'"
+            ? "SELECT tmdb_id, medientyp, land, imdb_bewertung FROM movies WHERE tmdb_id > 0"
+            : "SELECT tmdb_id, medientyp, land, imdb_bewertung FROM movies WHERE tmdb_id > 0 AND (land = '[]' OR imdb_bewertung IS NULL)"
         )
-        .all() as { tmdb_id: number; medientyp: "film" | "serie"; land: string }[];
+        .all() as { tmdb_id: number; medientyp: "film" | "serie"; land: string; imdb_bewertung: number | null }[];
       const updated: number[] = [];
       const failed: { tmdb_id: number; error: string }[] = [];
+      let omdbCalls = 0;
       for (const row of rows) {
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
-          const imdb_bewertung = omdb ? await omdb.rating(m.imdb_id) : null;
+          const useOmdb = omdb !== undefined && omdbCalls < omdbLimit;
+          const imdb_bewertung = useOmdb ? await omdb!.rating(m.imdb_id) : null;
+          if (useOmdb) omdbCalls++;
           updateEnriched.run(
             JSON.stringify(m.land),
             JSON.stringify(m.regisseure),
