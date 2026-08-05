@@ -16,7 +16,7 @@ Läuft als Docker-Container im Heimnetz.
 3. Unter den Stack-Einstellungen die Env-Variable `TMDB_API_KEY` mit deinem Key setzen (Komodo-Einstellung „Environment“) – kein `.env`-File nötig. Der Key bleibt damit auf dem Server.
 4. Stack starten (Komodo baut das Image und startet den Container).
 
-Die App ist danach unter `http://<unraid-ip>:3000` erreichbar (in Komodo/Portainer einen Port-Forward auf Port 3000 des Containers setzen).
+Die App ist danach unter `http://<unraid-ip>:8080` erreichbar (Host-Port 8080 → Container-Port 3000; Port 3000 ist am Host oft von Grafana belegt, daher der Ausweich-Port).
 
 ## Setup (alternativ, ohne Komodo)
 
@@ -51,7 +51,7 @@ Der Playwright-Smoke (`e2e/`) braucht einen laufenden Server MIT echtem TMDB-Key
 cd e2e
 npm install
 npx playwright install chromium
-BASE_URL=http://<server-ip>:3000 npx playwright test
+BASE_URL=http://<server-ip>:8080 npx playwright test
 ```
 
 Voraussetzung: frische Datenbank (Volume leeren oder neuen Stack mit frischem Volume starten).
