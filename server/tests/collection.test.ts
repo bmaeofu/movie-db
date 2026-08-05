@@ -9,6 +9,8 @@ const filme: Record<number, TmdbMovie> = {
   27205: { tmdb_id: 27205, titel: "Inception", jahr: 2010, medientyp: "film", genres: ["Action"], poster_url: null, overview: "Traum", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
   157336: { tmdb_id: 157336, titel: "Interstellar", jahr: 2014, medientyp: "film", genres: ["Science Fiction"], poster_url: null, overview: "Wurmloch", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
   1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
+  1234: { tmdb_id: 1234, titel: "Neu A", jahr: 2020, medientyp: "film", genres: [], poster_url: null, overview: null, land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
+  1235: { tmdb_id: 1235, titel: "Neu B", jahr: 2021, medientyp: "film", genres: [], poster_url: null, overview: null, land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
 };
 
 const fakeTmdb: TmdbClient = {
@@ -37,6 +39,25 @@ describe("Sammlung", () => {
     await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 27205, medientyp: "film" });
     await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 157336, medientyp: "film" });
     await request(app).post("/api/collection").set("Cookie", benCookie).send({ tmdb_id: 1399, medientyp: "serie" });
+  });
+
+  it("source: default 'user', 'kodi' erlaubt, ungültig → 400", async () => {
+    const defaultSrc = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 1234, medientyp: "film" });
+    expect(defaultSrc.status).toBe(201);
+    const rowUser = db.prepare("SELECT source FROM movies WHERE tmdb_id = 1234").get() as { source: string } | undefined;
+    expect(rowUser?.source).toBe("user");
+    const kodi = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 1235, medientyp: "film", source: "kodi" });
+    expect(kodi.status).toBe(201);
+    const rowKodi = db.prepare("SELECT source FROM movies WHERE tmdb_id = 1235").get() as { source: string } | undefined;
+    expect(rowKodi?.source).toBe("kodi");
+    const bad = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 27205, medientyp: "film", source: "omdb" });
+    expect(bad.status).toBe(400);
+    const list = (await request(app).get("/api/collection").set("Cookie", annaCookie)).body as {
+      tmdb_id: number;
+      source: string;
+    }[];
+    expect(list.find((m) => m.tmdb_id === 1235)?.source).toBe("kodi");
+    expect(list.find((m) => m.tmdb_id === 1234)?.source).toBe("user");
   });
 
   it("fügt einen Film hinzu (erzeugt movies- und collection-Zeile)", async () => {

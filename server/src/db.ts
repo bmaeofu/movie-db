@@ -23,6 +23,7 @@ export function initSchema(db: Database.Database): void {
       tmdb_bewertung REAL,
       tmdb_stimmen INTEGER,
       imdb_bewertung REAL,
+      source TEXT NOT NULL DEFAULT 'user',
       zuletzt_aktualisiert TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS collection (
@@ -81,6 +82,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "tmdb_bewertung", "tmdb_bewertung REAL");
   ensureColumn(db, "movies", "tmdb_stimmen", "tmdb_stimmen INTEGER");
   ensureColumn(db, "movies", "imdb_bewertung", "imdb_bewertung REAL");
+  ensureColumn(db, "movies", "source", "source TEXT NOT NULL DEFAULT 'user'");
 }
 
 /** Fügt eine Spalte hinzu, falls sie fehlt (Migration für Bestands-DBs). */

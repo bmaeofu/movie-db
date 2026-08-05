@@ -12,6 +12,7 @@ export default function MovieCard({ movie, onClick }: { movie: Movie; onClick: (
         <h3>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h3>
         <div className="meta">
           <span>{movie.medientyp === "film" ? "Film" : "Serie"}</span>
+          {movie.source === "kodi" && <span className="status-badge">Kodi</span>}
           <span aria-label="Durchschnittsbewertung">★ {movie.avg_rating ?? "–"} ({movie.rating_count})</span>
           {movie.my_status && <span className="status-badge">{movie.my_status}</span>}
         </div>

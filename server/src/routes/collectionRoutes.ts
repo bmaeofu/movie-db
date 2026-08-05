@@ -11,9 +11,9 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
 
   const upsertMovie = db.prepare(
     `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung)
+                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, source)
      VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
-             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung)
+             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @source)
      ON CONFLICT(tmdb_id) DO UPDATE SET
        titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
        genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
@@ -100,9 +100,17 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
   router.post(
     "/",
     asyncHandler(async (req, res) => {
-      const { tmdb_id, medientyp } = (req.body ?? {}) as { tmdb_id?: unknown; medientyp?: unknown };
+      const { tmdb_id, medientyp, source } = (req.body ?? {}) as {
+        tmdb_id?: unknown;
+        medientyp?: unknown;
+        source?: unknown;
+      };
       if (typeof tmdb_id !== "number" || !Number.isInteger(tmdb_id) || (medientyp !== "film" && medientyp !== "serie")) {
         res.status(400).json({ error: "tmdb_id (Integer) und medientyp ('film'|'serie') erforderlich" });
+        return;
+      }
+      if (source !== undefined && source !== "user" && source !== "kodi") {
+        res.status(400).json({ error: "source ('user'|'kodi') erforderlich" });
         return;
       }
       const existing = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?").get(tmdb_id);
@@ -134,6 +142,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         tmdb_bewertung: movie.tmdb_bewertung,
         tmdb_stimmen: movie.tmdb_stimmen,
         imdb_bewertung,
+        source: (source as string) ?? "user",
       });
       const user = (req as AuthedRequest).user;
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);

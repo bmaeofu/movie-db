@@ -27,7 +27,7 @@ describe("Datenbankschema", () => {
       .prepare("PRAGMA table_info(movies)")
       .all()
       .map((c: any) => c.name);
-    for (const c of ["land", "regisseure", "autoren", "cast"]) {
+    for (const c of ["land", "regisseure", "autoren", "cast", "source"]) {
       expect(cols).toContain(c);
     }
   });
