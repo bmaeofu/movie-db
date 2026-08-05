@@ -12,7 +12,7 @@ Läuft als Docker-Container im Heimnetz.
 ## Setup (unRAID mit Komodo, empfohlen)
 
 1. Repo auf den unRAID-Server übertragen oder direkt dort klonen.
-2. In Komodo einen neuen **Compose-Stack** anlegen, der auf die `docker-compose.yml` dieses Repos zeigt.
+2. In Komodo einen neuen **Compose-Stack** anlegen, der auf die `compose.yaml` dieses Repos zeigt (Komodos Standard-Dateiname).
 3. Unter den Stack-Einstellungen die Env-Variable `TMDB_API_KEY` mit deinem Key setzen (Komodo-Einstellung „Environment“) – kein `.env`-File nötig. Der Key bleibt damit auf dem Server.
 4. Stack starten (Komodo baut das Image und startet den Container).
 
