@@ -87,6 +87,36 @@ export function createAuthRouter(db: Database.Database): Router {
     res.status(204).end();
   });
 
+  router.put(
+    "/password",
+    requireAuth(db),
+    asyncHandler(async (req, res) => {
+      const { altes_password, neues_password } = (req.body ?? {}) as {
+        altes_password?: unknown;
+        neues_password?: unknown;
+      };
+      const user = (req as AuthedRequest).user;
+      const row = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(user.id) as {
+        password_hash: string;
+      };
+      if (typeof altes_password !== "string" || !verifyPassword(altes_password, row.password_hash)) {
+        res.status(401).json({ error: "Altes Passwort ist falsch" });
+        return;
+      }
+      if (typeof neues_password !== "string" || neues_password.length < 6) {
+        res.status(400).json({ error: "Neues Passwort muss mindestens 6 Zeichen haben" });
+        return;
+      }
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(neues_password), user.id);
+      const cookies = parseCookies(req.headers.cookie);
+      const currentToken = cookies[SESSION_COOKIE];
+      if (currentToken) {
+        db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(user.id, currentToken);
+      }
+      res.status(204).end();
+    })
+  );
+
   router.get("/me", requireAuth(db), (req, res) => {
     const u = (req as AuthedRequest).user;
     res.json({ id: u.id, name: u.name, is_admin: u.is_admin });

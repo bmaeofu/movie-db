@@ -4,6 +4,7 @@ import path from "node:path";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "./tmdb.js";
 import { createAuthRouter } from "./routes/authRoutes.js";
+import { createUserRouter } from "./routes/userRoutes.js";
 import { createSearchRouter } from "./routes/searchRoutes.js";
 import { createCollectionRouter } from "./routes/collectionRoutes.js";
 import { createMovieRouter } from "./routes/movieRoutes.js";
@@ -19,6 +20,7 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use(express.json());
 
   app.use("/api/auth", createAuthRouter(db));
+  app.use("/api/users", createUserRouter(db));
   app.use("/api/search", createSearchRouter(db, tmdb));
   app.use("/api/collection", createCollectionRouter(db, tmdb));
   app.use("/api/movies", createMovieRouter(db));

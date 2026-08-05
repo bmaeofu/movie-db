@@ -37,6 +37,10 @@ export interface ListDetail {
   items: Movie[];
 }
 
+export interface UserSummary extends User {
+  created_at: string;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     credentials: "same-origin",
@@ -53,6 +57,12 @@ export const api = {
   status: () => request<{ needsBootstrap: boolean }>("/api/auth/status"),
   login: (name: string, password: string) => request<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ name, password }) }),
   register: (name: string, password: string) => request<User>("/api/auth/register", { method: "POST", body: JSON.stringify({ name, password }) }),
+  changePassword: (altes_password: string, neues_password: string) =>
+    request<void>("/api/auth/password", { method: "PUT", body: JSON.stringify({ altes_password, neues_password }) }),
+  users: () => request<UserSummary[]>("/api/users"),
+  updateUser: (id: number, changes: { name?: string; password?: string; is_admin?: number }) =>
+    request<void>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(changes) }),
+  deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: "DELETE" }),
   me: () => request<User>("/api/auth/me"),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   search: (q: string) => request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
