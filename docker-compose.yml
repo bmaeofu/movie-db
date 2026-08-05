@@ -1,0 +1,14 @@
+services:
+  filmdatenbank:
+    build: .
+    container_name: filmdatenbank
+    ports:
+      - "3000:3000"
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+    volumes:
+      - fdb-data:/data
+    restart: unless-stopped
+
+volumes:
+  fdb-data:
