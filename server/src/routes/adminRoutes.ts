@@ -13,15 +13,19 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient): Rout
   );
 
   /**
-   * Reichert alle Bestandsfilme (positive tmdb_id) ohne Land-Daten mit
-   * Regisseuren/Autoren/Cast/Ländern an. Idempotent: überspringt bereits
-   * angereicherte Einträge und Custom-Filme (negative IDs).
+   * Reichert Bestandsfilme (positive tmdb_id) mit Regisseuren/Autoren/Cast/Ländern an.
+   * Ohne force: nur noch nicht angereicherte (land = '[]'); mit ?force=1: alle (überschreibt).
    */
   router.post(
     "/backfill",
     asyncHandler(async (req, res) => {
+      const force = req.query.force === "1";
       const rows = db
-        .prepare("SELECT tmdb_id, medientyp, land FROM movies WHERE tmdb_id > 0 AND land = '[]'")
+        .prepare(
+          force
+            ? "SELECT tmdb_id, medientyp, land FROM movies WHERE tmdb_id > 0"
+            : "SELECT tmdb_id, medientyp, land FROM movies WHERE tmdb_id > 0 AND land = '[]'"
+        )
         .all() as { tmdb_id: number; medientyp: "film" | "serie"; land: string }[];
       const updated: number[] = [];
       const failed: { tmdb_id: number; error: string }[] = [];
