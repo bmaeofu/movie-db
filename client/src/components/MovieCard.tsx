@@ -14,6 +14,8 @@ export default function MovieCard({ movie, onClick }: { movie: Movie; onClick: (
           <span>{movie.medientyp === "film" ? "Film" : "Serie"}</span>
           {movie.source === "kodi" && <span className="status-badge">Kodi</span>}
           <span aria-label="Durchschnittsbewertung">★ {movie.avg_rating ?? "–"} ({movie.rating_count})</span>
+          {movie.tmdb_bewertung !== null && <span aria-label="TMDB-Bewertung">TMDb {movie.tmdb_bewertung.toFixed(1)}</span>}
+          {movie.imdb_bewertung !== null && <span aria-label="IMDb-Bewertung">IMDb {movie.imdb_bewertung.toFixed(1)}</span>}
           {movie.my_status && <span className="status-badge">{movie.my_status}</span>}
         </div>
       </div>
