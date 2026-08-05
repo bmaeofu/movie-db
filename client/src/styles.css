@@ -108,3 +108,5 @@ input, select, textarea {
   padding: 0.6rem 0.9rem; margin-bottom: 0.5rem; gap: 0.6rem;
 }
 .list-row .actions { display: flex; gap: 0.4rem; }
+.list-name { border: none; background: none; font-size: 1.05rem; padding: 0; }
+.list-name:hover { color: var(--accent); }
