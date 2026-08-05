@@ -60,6 +60,26 @@ describe("Sammlung", () => {
     expect(list.find((m) => m.tmdb_id === 1234)?.source).toBe("user");
   });
 
+  it("Bewertungs-Override: tmdb/imdb-Bewertung aus dem Body wird übernommen, ungültig → 400", async () => {
+    const ok = await request(app)
+      .post("/api/collection")
+      .set("Cookie", annaCookie)
+      .send({ tmdb_id: 1234, medientyp: "film", source: "kodi", tmdb_bewertung: 7.5, imdb_bewertung: 8.1 });
+    // 1234 ist bereits in der Sammlung → 200, upsert aktualisiert die Bewertungen
+    expect(ok.status).toBe(200);
+    const row = db.prepare("SELECT tmdb_bewertung, imdb_bewertung FROM movies WHERE tmdb_id = 1234").get() as {
+      tmdb_bewertung: number | null;
+      imdb_bewertung: number | null;
+    };
+    expect(row.tmdb_bewertung).toBe(7.5);
+    expect(row.imdb_bewertung).toBe(8.1);
+    const bad = await request(app)
+      .post("/api/collection")
+      .set("Cookie", annaCookie)
+      .send({ tmdb_id: 1234, medientyp: "film", imdb_bewertung: 11 });
+    expect(bad.status).toBe(400);
+  });
+
   it("fügt einen Film hinzu (erzeugt movies- und collection-Zeile)", async () => {
     const before = db.prepare("SELECT COUNT(*) AS n FROM movies").get() as { n: number };
     expect(before.n).toBe(3);

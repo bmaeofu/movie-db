@@ -100,10 +100,12 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
   router.post(
     "/",
     asyncHandler(async (req, res) => {
-      const { tmdb_id, medientyp, source } = (req.body ?? {}) as {
+      const { tmdb_id, medientyp, source, tmdb_bewertung, imdb_bewertung } = (req.body ?? {}) as {
         tmdb_id?: unknown;
         medientyp?: unknown;
         source?: unknown;
+        tmdb_bewertung?: unknown;
+        imdb_bewertung?: unknown;
       };
       if (typeof tmdb_id !== "number" || !Number.isInteger(tmdb_id) || (medientyp !== "film" && medientyp !== "serie")) {
         res.status(400).json({ error: "tmdb_id (Integer) und medientyp ('film'|'serie') erforderlich" });
@@ -111,6 +113,15 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       }
       if (source !== undefined && source !== "user" && source !== "kodi") {
         res.status(400).json({ error: "source ('user'|'kodi') erforderlich" });
+        return;
+      }
+      const numOk = (v: unknown): v is number =>
+        typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 10;
+      if (
+        (tmdb_bewertung !== undefined && tmdb_bewertung !== null && !numOk(tmdb_bewertung)) ||
+        (imdb_bewertung !== undefined && imdb_bewertung !== null && !numOk(imdb_bewertung))
+      ) {
+        res.status(400).json({ error: "Bewertungen müssen Zahlen zwischen 0 und 10 sein" });
         return;
       }
       const existing = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?").get(tmdb_id);
@@ -125,7 +136,14 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
         return;
       }
-      const imdb_bewertung = omdb && req.query.skip_omdb !== "1" ? await omdb.rating(movie.imdb_id) : null;
+      let finalTmdb = movie.tmdb_bewertung;
+      let finalImdb: number | null = null;
+      if (numOk(tmdb_bewertung)) finalTmdb = tmdb_bewertung;
+      if (numOk(imdb_bewertung)) {
+        finalImdb = imdb_bewertung;
+      } else if (omdb && req.query.skip_omdb !== "1") {
+        finalImdb = await omdb.rating(movie.imdb_id);
+      }
       upsertMovie.run({
         tmdb_id: movie.tmdb_id,
         titel: movie.titel,
@@ -139,9 +157,9 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         regisseure: JSON.stringify(movie.regisseure),
         autoren: JSON.stringify(movie.autoren),
         cast: JSON.stringify(movie.cast),
-        tmdb_bewertung: movie.tmdb_bewertung,
+        tmdb_bewertung: finalTmdb,
         tmdb_stimmen: movie.tmdb_stimmen,
-        imdb_bewertung,
+        imdb_bewertung: finalImdb,
         source: (source as string) ?? "user",
       });
       const user = (req as AuthedRequest).user;
