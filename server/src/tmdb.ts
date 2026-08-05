@@ -82,8 +82,9 @@ export function createTmdbClient(options: {
 
   async function countryNames(): Promise<Map<string, string>> {
     if (countries) return countries;
-    const cfg = await request<{ countries: { iso_3166_1: string; name: string }[] }>("/configuration/countries", {});
-    countries = new Map(cfg.countries.map((c) => [c.iso_3166_1, c.name]));
+    // TMDB liefert hier ein rohes Array von Ländern (kein { countries: [...] }-Objekt)
+    const list = await request<{ iso_3166_1: string; name: string }[]>("/configuration/countries", {});
+    countries = new Map(list.map((c) => [c.iso_3166_1, c.name]));
     return countries;
   }
 

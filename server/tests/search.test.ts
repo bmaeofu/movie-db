@@ -121,7 +121,7 @@ describe("TMDB-Details-Anreicherung", () => {
       if (u.pathname.endsWith("/genre/movie/list")) return jsonResponse({ genres: [] });
       if (u.pathname.endsWith("/genre/tv/list")) return jsonResponse({ genres: [] });
       if (u.pathname.endsWith("/configuration/countries")) {
-        return jsonResponse({ countries: [{ iso_3166_1: "DE", name: "Deutschland" }] });
+        return jsonResponse([{ iso_3166_1: "DE", name: "Deutschland" }]);
       }
       if (u.pathname.endsWith("/movie/27205")) {
         return jsonResponse({
