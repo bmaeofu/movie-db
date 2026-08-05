@@ -22,7 +22,8 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     "/backfill",
     asyncHandler(async (req, res) => {
       const force = req.query.force === "1";
-      const omdbLimit = Number(req.query.omdb_limit) || Infinity;
+      const omdbLimitRaw = Number(req.query.omdb_limit);
+      const omdbLimit = Number.isFinite(omdbLimitRaw) ? omdbLimitRaw : Infinity;
       const rows = db
         .prepare(
           force
