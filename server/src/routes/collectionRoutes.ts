@@ -177,6 +177,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       const genre = typeof req.query.genre === "string" ? req.query.genre.trim() : "";
       const land = typeof req.query.land === "string" ? req.query.land.trim() : "";
       const regisseur = typeof req.query.regisseur === "string" ? req.query.regisseur.trim() : "";
+      const jahrParam = typeof req.query.jahr === "string" ? req.query.jahr.trim() : "";
       const medientyp = typeof req.query.medientyp === "string" ? req.query.medientyp : "";
       const status = typeof req.query.status === "string" ? req.query.status : "";
       const sort = typeof req.query.sort === "string" ? req.query.sort : "zuletzt_hinzugefuegt";
@@ -204,6 +205,11 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       if (regisseur) {
         where.push("m.regisseure LIKE @regisseur");
         params.regisseur = `%${regisseur}%`;
+      }
+      const jahr = Number(jahrParam);
+      if (jahrParam !== "" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100) {
+        where.push("m.jahr = @jahr");
+        params.jahr = jahr;
       }
       if (medientyp === "film" || medientyp === "serie") {
         where.push("m.medientyp = @medientyp");
@@ -236,17 +242,24 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
   router.get(
     "/facets",
     asyncHandler(async (_req, res) => {
-      const rows = db.prepare("SELECT land, regisseure FROM movies").all() as {
+      const rows = db.prepare("SELECT land, regisseure, jahr FROM movies").all() as {
         land: string;
         regisseure: string;
+        jahr: number | null;
       }[];
       const laender = new Set<string>();
       const regisseure = new Set<string>();
+      const jahre = new Set<number>();
       for (const r of rows) {
         for (const l of JSON.parse(r.land) as string[]) laender.add(l);
         for (const d of JSON.parse(r.regisseure) as string[]) regisseure.add(d);
+        if (r.jahr !== null) jahre.add(r.jahr);
       }
-      res.json({ laender: [...laender].sort(), regisseure: [...regisseure].sort() });
+      res.json({
+        laender: [...laender].sort(),
+        regisseure: [...regisseure].sort(),
+        jahre: [...jahre].sort((a, b) => b - a),
+      });
     })
   );
 

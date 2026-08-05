@@ -143,6 +143,16 @@ describe("Sammlung", () => {
     expect(inception.cast).toEqual([{ name: "Leonardo DiCaprio", rolle: "Cobb" }]);
   });
 
+  it("filtert nach Jahr und liefert jahre-Facette", async () => {
+    const byJahr = await request(app).get("/api/collection?jahr=2010").set("Cookie", annaCookie);
+    expect(byJahr.body.map((m: any) => m.tmdb_id)).toEqual([27205]); // Inception 2010
+    const keinJahr = await request(app).get("/api/collection?jahr=1960").set("Cookie", annaCookie);
+    expect(keinJahr.body).toEqual([]);
+    const facets = await request(app).get("/api/collection/facets").set("Cookie", annaCookie);
+    expect(facets.body.jahre).toContain(2010);
+    expect(facets.body.jahre).toContain(2011); // Game of Thrones
+  });
+
   it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });

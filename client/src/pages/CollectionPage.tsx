@@ -11,10 +11,15 @@ export default function CollectionPage() {
   const [genre, setGenre] = useState("");
   const [land, setLand] = useState("");
   const [regisseur, setRegisseur] = useState("");
+  const [jahr, setJahr] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
-  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[] }>({ laender: [], regisseure: [] });
+  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[]; jahre: number[] }>({
+    laender: [],
+    regisseure: [],
+    jahre: [],
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [detail, setDetail] = useState<Movie | null>(null);
 
@@ -25,12 +30,13 @@ export default function CollectionPage() {
     if (genre) filters.genre = genre;
     if (land) filters.land = land;
     if (regisseur) filters.regisseur = regisseur;
+    if (jahr) filters.jahr = jahr;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
     const fresh = await api.collection(filters);
     setMovies(fresh);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, jahr, medientyp, status, sort]);
 
   useEffect(() => {
     void load();
@@ -63,6 +69,12 @@ export default function CollectionPage() {
           <option value="">Alle Regisseure</option>
           {facets.regisseure.map((r) => (
             <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+        <select value={jahr} onChange={(e) => setJahr(e.target.value)}>
+          <option value="">Alle Jahre</option>
+          {facets.jahre.map((y) => (
+            <option key={y} value={String(y)}>{y}</option>
           ))}
         </select>
         <select value={medientyp} onChange={(e) => setMedientyp(e.target.value)}>
