@@ -83,10 +83,10 @@ export function createListRouter(db: Database.Database): Router {
       const items = listMovieViews(
         db,
         (req as AuthedRequest).user.id,
-        "FROM collection c JOIN list_items li ON li.tmdb_id = c.tmdb_id JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = c.added_by",
+        "FROM list_items li LEFT JOIN collection c ON c.tmdb_id = li.tmdb_id LEFT JOIN users u ON u.id = c.added_by JOIN movies m ON m.tmdb_id = li.tmdb_id",
         ["li.list_id = @listId"],
         { listId },
-        "c.tmdb_id ASC"
+        "li.tmdb_id ASC"
       );
       res.json({ ...list, items });
     })

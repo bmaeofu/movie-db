@@ -78,6 +78,19 @@ describe("Persönliche Listen", () => {
     expect(res.body.items[0].my_rating).toBe(4);
   });
 
+  it("Film bleibt in der Liste sichtbar, wenn er aus der Sammlung entfernt wird", async () => {
+    const create = await request(app).post("/api/lists").set("Cookie", annaCookie).send({ name: "Top" });
+    const listId = create.body.id;
+    await request(app).post(`/api/lists/${listId}/items`).set("Cookie", annaCookie).send({ tmdb_id: 27205 });
+    const del = await request(app).delete("/api/collection/27205").set("Cookie", annaCookie);
+    expect(del.status).toBe(204);
+    const res = await request(app).get(`/api/lists/${listId}`).set("Cookie", annaCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].tmdb_id).toBe(27205);
+    expect(res.body.items[0].added_by_name).toBeNull();
+  });
+
   it("Item entfernen und Liste löschen (löscht Items per Cascade)", async () => {
     const create = await request(app).post("/api/lists").set("Cookie", annaCookie).send({ name: "Top" });
     const listId = create.body.id;

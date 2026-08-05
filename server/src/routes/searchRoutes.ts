@@ -24,11 +24,21 @@ export function createSearchRouter(db: Database.Database, tmdb: TmdbClient): Rou
         res.json({ results: JSON.parse(cached.tmdb_json) });
         return;
       }
-      const results = await tmdb.search(q);
-      db.prepare(
-        `INSERT INTO search_cache (query, tmdb_json, cached_at) VALUES (?, ?, datetime('now'))
-         ON CONFLICT(query) DO UPDATE SET tmdb_json = excluded.tmdb_json, cached_at = datetime('now')`
-      ).run(q, JSON.stringify(results));
+      let results;
+      try {
+        results = await tmdb.search(q);
+        db.prepare(
+          `INSERT INTO search_cache (query, tmdb_json, cached_at) VALUES (?, ?, datetime('now'))
+           ON CONFLICT(query) DO UPDATE SET tmdb_json = excluded.tmdb_json, cached_at = datetime('now')`
+        ).run(q, JSON.stringify(results));
+      } catch (err) {
+        const stale = db.prepare("SELECT tmdb_json FROM search_cache WHERE query = ?").get(q) as
+          | { tmdb_json: string }
+          | undefined;
+        if (!stale) throw err;
+        res.json({ results: JSON.parse(stale.tmdb_json) });
+        return;
+      }
       res.json({ results });
     })
   );

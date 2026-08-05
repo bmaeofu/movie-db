@@ -80,6 +80,32 @@ describe("TMDB-Suche", () => {
     expect(calls).toBe(2);
   });
 
+  it("Cache-Fallback: bei TMDB-Ausfall gecachte Ergebnisse, ohne Cache 500", async () => {
+    db = createDb(":memory:");
+    app = createApp(db, createTmdbClient({ apiKey: "testkey", fetchImpl: fetchMock, maxRetries: 0 }));
+    const admin = await request(app).post("/api/auth/register").send({ name: "Anna", password: "geheim123" });
+    adminCookie = admin.headers["set-cookie"][0].split(";")[0];
+    // (a) erste Suche füllt den Cache
+    fetchMock.mockImplementation(async (url: URL | RequestInfo) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith("/genre/movie/list")) return jsonResponse({ genres: [] });
+      if (u.pathname.endsWith("/genre/tv/list")) return jsonResponse({ genres: [] });
+      return jsonResponse(tmdbSearchResponse());
+    });
+    const first = await request(app).get("/api/search?q=inception").set("Cookie", adminCookie);
+    expect(first.status).toBe(200);
+    expect(first.body.results).toHaveLength(2);
+    // (b) TMDB-Ausfall: fetch wirft
+    fetchMock.mockRejectedValue(new Error("TMDB down"));
+    // (c) identische Suche → Cache-Fallback mit denselben Ergebnissen
+    const fallback = await request(app).get("/api/search?q=inception").set("Cookie", adminCookie);
+    expect(fallback.status).toBe(200);
+    expect(fallback.body.results).toEqual(first.body.results);
+    // (d) Suche ohne Cache-Eintrag bei Fehler → 500
+    const noCache = await request(app).get("/api/search?q=unbekannt").set("Cookie", adminCookie);
+    expect(noCache.status).toBe(500);
+  });
+
   it("liefert 401 ohne Session und 400 ohne q", async () => {
     const unauth = await request(app).get("/api/search?q=inception");
     expect(unauth.status).toBe(401);

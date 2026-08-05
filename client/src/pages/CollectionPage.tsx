@@ -20,7 +20,9 @@ export default function CollectionPage() {
     if (genre) filters.genre = genre;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
-    setMovies(await api.collection(filters));
+    const fresh = await api.collection(filters);
+    setMovies(fresh);
+    setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
   }, [q, genre, medientyp, status, sort]);
 
   useEffect(() => {

@@ -69,6 +69,15 @@ describe("Bewertung, Status, Notizen", () => {
     expect((rows[0] as any).status).toBe("schauen");
   });
 
+  it("Bewertung/Status/Notiz für unbekannte tmdb_id → 404", async () => {
+    const rating = await request(app).put("/api/movies/99999/rating").set("Cookie", annaCookie).send({ sterne: 4 });
+    expect(rating.status).toBe(404);
+    const status = await request(app).put("/api/movies/99999/watch-status").set("Cookie", annaCookie).send({ status: "gesehen" });
+    expect(status.status).toBe(404);
+    const note = await request(app).put("/api/movies/99999/note").set("Cookie", annaCookie).send({ text: "Hallo" });
+    expect(note.status).toBe(404);
+  });
+
   it("Notiz setzen und löschen; leere Notiz → 400", async () => {
     const resLeer = await request(app).put("/api/movies/27205/note").set("Cookie", annaCookie).send({ text: "" });
     expect(resLeer.status).toBe(400);

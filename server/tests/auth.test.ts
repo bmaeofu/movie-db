@@ -57,6 +57,11 @@ describe("Auth", () => {
     expect(meAfter.status).toBe(401);
   });
 
+  it("ungültiges Prozent-Encoding im Cookie → 401 statt 500", async () => {
+    const res = await request(app).get("/api/auth/me").set("Cookie", "fdb_session=%zz");
+    expect(res.status).toBe(401);
+  });
+
   it("status meldet needsBootstrap nur ohne Nutzer", async () => {
     const res = await request(app).get("/api/auth/status");
     expect(res.body.needsBootstrap).toBe(true);

@@ -17,6 +17,11 @@ export function createMovieRouter(db: Database.Database): Router {
         res.status(400).json({ error: "sterne (Integer 1–5) erforderlich" });
         return;
       }
+      const movieExists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?").get(tmdbId);
+      if (!movieExists) {
+        res.status(404).json({ error: "Film nicht gefunden" });
+        return;
+      }
       const user = (req as AuthedRequest).user;
       db.prepare(
         `INSERT INTO ratings (user_id, tmdb_id, sterne, updated_at) VALUES (?, ?, ?, datetime('now'))
@@ -35,6 +40,11 @@ export function createMovieRouter(db: Database.Database): Router {
         res.status(400).json({ error: "status ('schauen'|'gesehen'|'kein_interesse') erforderlich" });
         return;
       }
+      const movieExists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?").get(tmdbId);
+      if (!movieExists) {
+        res.status(404).json({ error: "Film nicht gefunden" });
+        return;
+      }
       const user = (req as AuthedRequest).user;
       db.prepare(
         `INSERT INTO watch_status (user_id, tmdb_id, status) VALUES (?, ?, ?)
@@ -51,6 +61,11 @@ export function createMovieRouter(db: Database.Database): Router {
       const text = (req.body ?? {}).text;
       if (!Number.isInteger(tmdbId) || typeof text !== "string" || text.trim().length === 0) {
         res.status(400).json({ error: "text (nicht leer) erforderlich" });
+        return;
+      }
+      const movieExists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?").get(tmdbId);
+      if (!movieExists) {
+        res.status(404).json({ error: "Film nicht gefunden" });
         return;
       }
       const user = (req as AuthedRequest).user;
