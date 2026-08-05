@@ -18,6 +18,54 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
   );
 
   router.post(
+    "/custom",
+    asyncHandler(async (req, res) => {
+      const { titel, jahr, medientyp, genres, overview } = (req.body ?? {}) as {
+        titel?: unknown;
+        jahr?: unknown;
+        medientyp?: unknown;
+        genres?: unknown;
+        overview?: unknown;
+      };
+      if (typeof titel !== "string" || titel.trim().length === 0) {
+        res.status(400).json({ error: "Titel erforderlich" });
+        return;
+      }
+      if (medientyp !== "film" && medientyp !== "serie") {
+        res.status(400).json({ error: "medientyp ('film'|'serie') erforderlich" });
+        return;
+      }
+      const yearIsValid =
+        jahr === undefined ||
+        jahr === null ||
+        (typeof jahr === "number" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100);
+      if (!yearIsValid) {
+        res.status(400).json({ error: "jahr muss eine Jahreszahl sein" });
+        return;
+      }
+      if (genres !== undefined && !(Array.isArray(genres) && genres.every((g) => typeof g === "string"))) {
+        res.status(400).json({ error: "genres muss ein Array aus Strings sein" });
+        return;
+      }
+      if (overview !== undefined && typeof overview !== "string") {
+        res.status(400).json({ error: "overview muss ein String sein" });
+        return;
+      }
+      const newId = (
+        db.prepare("SELECT COALESCE(MIN(tmdb_id), 0) - 1 AS id FROM movies WHERE tmdb_id < 0").get() as { id: number }
+      ).id;
+      const user = (req as AuthedRequest).user;
+      const year = typeof jahr === "number" ? jahr : null;
+      db.prepare(
+        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, '{}')`
+      ).run(newId, titel.trim(), year, medientyp, JSON.stringify((genres as string[]) ?? []), (overview as string) ?? null);
+      db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(newId, user.id);
+      res.status(201).json({ message: "Zur Sammlung hinzugefügt", tmdb_id: newId });
+    })
+  );
+
+  router.post(
     "/",
     asyncHandler(async (req, res) => {
       const { tmdb_id, medientyp } = (req.body ?? {}) as { tmdb_id?: unknown; medientyp?: unknown };

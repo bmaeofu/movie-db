@@ -69,6 +69,17 @@ export const api = {
   collection: (filters: Record<string, string>) => request<Movie[]>("/api/collection?" + new URLSearchParams(filters).toString()),
   addToCollection: (tmdb_id: number, medientyp: string) =>
     request<{ message: string }>("/api/collection", { method: "POST", body: JSON.stringify({ tmdb_id, medientyp }) }),
+  addCustomMovie: (payload: {
+    titel: string;
+    jahr?: number | null;
+    medientyp: string;
+    genres?: string[];
+    overview?: string | null;
+  }) =>
+    request<{ message: string; tmdb_id: number }>("/api/collection/custom", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   removeFromCollection: (tmdbId: number) => request<void>(`/api/collection/${tmdbId}`, { method: "DELETE" }),
   setRating: (tmdbId: number, sterne: number) =>
     request<void>(`/api/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),
