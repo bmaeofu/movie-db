@@ -238,6 +238,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         titel: "m.titel COLLATE NOCASE ASC",
         jahr: "m.jahr DESC",
         bewertung: "avg_rating DESC",
+        tmdb_bewertung: "m.tmdb_bewertung DESC",
+        imdb_bewertung: "m.imdb_bewertung DESC",
         zuletzt_hinzugefuegt: "c.added_at DESC",
       };
 

@@ -110,6 +110,8 @@ export default function CollectionPage() {
           <option value="titel">Titel A–Z</option>
           <option value="jahr">Neueste zuerst</option>
           <option value="bewertung">Beste Bewertung</option>
+          <option value="tmdb_bewertung">Beste TMDb-Bewertung</option>
+          <option value="imdb_bewertung">Beste IMDb-Bewertung</option>
         </select>
         <button className="primary" onClick={() => setSearchOpen(true)}>+ Film suchen</button>
       </div>

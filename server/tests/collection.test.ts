@@ -192,6 +192,16 @@ describe("Sammlung", () => {
     expect(res.body[2].tmdb_id).toBe(1399);
   });
 
+  it("sortiert nach TMDb- und IMDb-Bewertung", async () => {
+    db.prepare("UPDATE movies SET tmdb_bewertung = 6.0, imdb_bewertung = 6.5 WHERE tmdb_id = 27205").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 8.0, imdb_bewertung = 5.5 WHERE tmdb_id = 157336").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 7.0, imdb_bewertung = 8.5 WHERE tmdb_id = 1399").run();
+    const tmdb = await request(app).get("/api/collection?sort=tmdb_bewertung").set("Cookie", annaCookie);
+    expect(tmdb.body.map((m: any) => m.tmdb_id)).toEqual([157336, 1399, 27205]);
+    const imdb = await request(app).get("/api/collection?sort=imdb_bewertung").set("Cookie", annaCookie);
+    expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([1399, 27205, 157336]);
+  });
+
   it("entfernen: Admin oder Ersteller, sonst 403", async () => {
     const alsBen = await request(app).delete("/api/collection/27205").set("Cookie", benCookie);
     expect(alsBen.status).toBe(403);
