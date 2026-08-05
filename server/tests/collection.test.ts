@@ -11,6 +11,7 @@ const filme: Record<number, TmdbMovie> = {
   1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen", land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
   1234: { tmdb_id: 1234, titel: "Neu A", jahr: 2020, medientyp: "film", genres: [], poster_url: null, overview: null, land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
   1235: { tmdb_id: 1235, titel: "Neu B", jahr: 2021, medientyp: "film", genres: [], poster_url: null, overview: null, land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
+  1236: { tmdb_id: 1236, titel: "Neu C", jahr: 2022, medientyp: "film", genres: [], poster_url: null, overview: null, land: [], imdb_id: null, tmdb_bewertung: null, tmdb_stimmen: 0, regisseure: [], autoren: [], cast: [] },
 };
 
 const fakeTmdb: TmdbClient = {
@@ -64,19 +65,20 @@ describe("Sammlung", () => {
     const ok = await request(app)
       .post("/api/collection")
       .set("Cookie", annaCookie)
-      .send({ tmdb_id: 1234, medientyp: "film", source: "kodi", tmdb_bewertung: 7.5, imdb_bewertung: 8.1 });
-    // 1234 ist bereits in der Sammlung → 200, upsert aktualisiert die Bewertungen
-    expect(ok.status).toBe(200);
-    const row = db.prepare("SELECT tmdb_bewertung, imdb_bewertung FROM movies WHERE tmdb_id = 1234").get() as {
+      .send({ tmdb_id: 1236, medientyp: "film", source: "kodi", tmdb_bewertung: 7.5, imdb_bewertung: 8.1 });
+    expect(ok.status).toBe(201);
+    const row = db.prepare("SELECT tmdb_bewertung, imdb_bewertung, source FROM movies WHERE tmdb_id = 1236").get() as {
       tmdb_bewertung: number | null;
       imdb_bewertung: number | null;
+      source: string;
     };
     expect(row.tmdb_bewertung).toBe(7.5);
     expect(row.imdb_bewertung).toBe(8.1);
+    expect(row.source).toBe("kodi");
     const bad = await request(app)
       .post("/api/collection")
       .set("Cookie", annaCookie)
-      .send({ tmdb_id: 1234, medientyp: "film", imdb_bewertung: 11 });
+      .send({ tmdb_id: 1236, medientyp: "film", imdb_bewertung: 11 });
     expect(bad.status).toBe(400);
   });
 
