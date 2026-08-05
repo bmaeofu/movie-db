@@ -9,23 +9,30 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
   router.use(requireAuth(db));
 
   const upsertMovie = db.prepare(
-    `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json)
-     VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json)
+    `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                        land, regisseure, autoren, "cast")
+     VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
+             @land, @regisseure, @autoren, @cast)
      ON CONFLICT(tmdb_id) DO UPDATE SET
        titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
        genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
-       tmdb_json = excluded.tmdb_json, zuletzt_aktualisiert = datetime('now')`
+       tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
+       autoren = excluded.autoren, "cast" = excluded.cast, zuletzt_aktualisiert = datetime('now')`
   );
 
   router.post(
     "/custom",
     asyncHandler(async (req, res) => {
-      const { titel, jahr, medientyp, genres, overview } = (req.body ?? {}) as {
+      const { titel, jahr, medientyp, genres, overview, land, regisseure, autoren, cast } = (req.body ?? {}) as {
         titel?: unknown;
         jahr?: unknown;
         medientyp?: unknown;
         genres?: unknown;
         overview?: unknown;
+        land?: unknown;
+        regisseure?: unknown;
+        autoren?: unknown;
+        cast?: unknown;
       };
       if (typeof titel !== "string" || titel.trim().length === 0) {
         res.status(400).json({ error: "Titel erforderlich" });
@@ -51,15 +58,37 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         res.status(400).json({ error: "overview muss ein String sein" });
         return;
       }
+      const listOk = (v: unknown): v is string[] =>
+        v === undefined || (Array.isArray(v) && v.every((x) => typeof x === "string"));
+      const castOk = (v: unknown): v is { name: string; rolle: string }[] =>
+        v === undefined ||
+        (Array.isArray(v) &&
+          v.every((x) => x !== null && typeof x === "object" && typeof (x as any).name === "string" && typeof (x as any).rolle === "string"));
+      if (!listOk(land) || !listOk(regisseure) || !listOk(autoren) || !castOk(cast)) {
+        res.status(400).json({ error: "land/regisseure/autoren: String-Arrays, cast: {name, rolle}-Objekte" });
+        return;
+      }
       const newId = (
         db.prepare("SELECT COALESCE(MIN(tmdb_id), 0) - 1 AS id FROM movies WHERE tmdb_id < 0").get() as { id: number }
       ).id;
       const user = (req as AuthedRequest).user;
       const year = typeof jahr === "number" ? jahr : null;
       db.prepare(
-        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, '{}')`
-      ).run(newId, titel.trim(), year, medientyp, JSON.stringify((genres as string[]) ?? []), (overview as string) ?? null);
+        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                            land, regisseure, autoren, "cast")
+         VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', ?, ?, ?, ?)`
+      ).run(
+        newId,
+        titel.trim(),
+        year,
+        medientyp,
+        JSON.stringify((genres as string[]) ?? []),
+        (overview as string) ?? null,
+        JSON.stringify((land as string[]) ?? []),
+        JSON.stringify((regisseure as string[]) ?? []),
+        JSON.stringify((autoren as string[]) ?? []),
+        JSON.stringify((cast as { name: string; rolle: string }[]) ?? [])
+      );
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(newId, user.id);
       res.status(201).json({ message: "Zur Sammlung hinzugefügt", tmdb_id: newId });
     })
@@ -94,6 +123,10 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         poster_url: movie.poster_url,
         overview: movie.overview,
         tmdb_json: JSON.stringify(movie),
+        land: JSON.stringify(movie.land),
+        regisseure: JSON.stringify(movie.regisseure),
+        autoren: JSON.stringify(movie.autoren),
+        cast: JSON.stringify(movie.cast),
       });
       const user = (req as AuthedRequest).user;
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);
@@ -106,7 +139,10 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
     asyncHandler(async (req, res) => {
       const userId = (req as AuthedRequest).user.id;
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const text = typeof req.query.text === "string" ? req.query.text.trim() : "";
       const genre = typeof req.query.genre === "string" ? req.query.genre.trim() : "";
+      const land = typeof req.query.land === "string" ? req.query.land.trim() : "";
+      const regisseur = typeof req.query.regisseur === "string" ? req.query.regisseur.trim() : "";
       const medientyp = typeof req.query.medientyp === "string" ? req.query.medientyp : "";
       const status = typeof req.query.status === "string" ? req.query.status : "";
       const sort = typeof req.query.sort === "string" ? req.query.sort : "zuletzt_hinzugefuegt";
@@ -117,9 +153,23 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         where.push("m.titel LIKE @q");
         params.q = `%${q}%`;
       }
+      if (text) {
+        where.push(
+          '(m.titel LIKE @text OR m.regisseure LIKE @text OR m.autoren LIKE @text OR m."cast" LIKE @text OR m.land LIKE @text)'
+        );
+        params.text = `%${text}%`;
+      }
       if (genre) {
         where.push("m.genres LIKE @genre");
         params.genre = `%${genre}%`;
+      }
+      if (land) {
+        where.push("m.land LIKE @land");
+        params.land = `%${land}%`;
+      }
+      if (regisseur) {
+        where.push("m.regisseure LIKE @regisseur");
+        params.regisseur = `%${regisseur}%`;
       }
       if (medientyp === "film" || medientyp === "serie") {
         where.push("m.medientyp = @medientyp");
@@ -146,6 +196,23 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient):
         orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt
       );
       res.json(rows);
+    })
+  );
+
+  router.get(
+    "/facets",
+    asyncHandler(async (_req, res) => {
+      const rows = db.prepare("SELECT land, regisseure FROM movies").all() as {
+        land: string;
+        regisseure: string;
+      }[];
+      const laender = new Set<string>();
+      const regisseure = new Set<string>();
+      for (const r of rows) {
+        for (const l of JSON.parse(r.land) as string[]) laender.add(l);
+        for (const d of JSON.parse(r.regisseure) as string[]) regisseure.add(d);
+      }
+      res.json({ laender: [...laender].sort(), regisseure: [...regisseure].sort() });
     })
   );
 

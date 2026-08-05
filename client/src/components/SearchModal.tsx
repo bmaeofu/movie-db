@@ -13,6 +13,10 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
   const [jahr, setJahr] = useState("");
   const [medientyp, setMedientyp] = useState("film");
   const [genres, setGenres] = useState("");
+  const [land, setLand] = useState("");
+  const [regisseure, setRegisseure] = useState("");
+  const [autoren, setAutoren] = useState("");
+  const [cast, setCast] = useState("");
   const [overview, setOverview] = useState("");
   const [manualMsg, setManualMsg] = useState("");
   const [manualErr, setManualErr] = useState(false);
@@ -55,12 +59,23 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
         jahr: j,
         medientyp,
         genres: genres.split(",").map((g) => g.trim()).filter(Boolean),
+        land: land.split(",").map((g) => g.trim()).filter(Boolean),
+        regisseure: regisseure.split(",").map((g) => g.trim()).filter(Boolean),
+        autoren: autoren.split(",").map((g) => g.trim()).filter(Boolean),
+        cast: cast.split("\n").map((l) => {
+          const [name, rolle] = l.split("|");
+          return { name: (name ?? "").trim(), rolle: (rolle ?? "").trim() };
+        }).filter((c) => c.name !== ""),
         overview: overview.trim() === "" ? null : overview.trim(),
       });
       setManualMsg("Zur Sammlung hinzugefügt.");
       setTitel("");
       setJahr("");
       setGenres("");
+      setLand("");
+      setRegisseure("");
+      setAutoren("");
+      setCast("");
       setOverview("");
       onAdded();
     } catch (err) {
@@ -114,6 +129,10 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
               </select>
             </div>
             <input value={genres} onChange={(e) => setGenres(e.target.value)} placeholder="Genres (kommagetrennt, optional)" />
+            <input value={land} onChange={(e) => setLand(e.target.value)} placeholder="Land/Länder (kommagetrennt, optional)" />
+            <input value={regisseure} onChange={(e) => setRegisseure(e.target.value)} placeholder="Regisseure (kommagetrennt, optional)" />
+            <input value={autoren} onChange={(e) => setAutoren(e.target.value)} placeholder="Autoren (kommagetrennt, optional)" />
+            <textarea value={cast} onChange={(e) => setCast(e.target.value)} placeholder="Schauspieler (eine Zeile pro Person: Name|Rolle, optional)" />
             <textarea value={overview} onChange={(e) => setOverview(e.target.value)} placeholder="Beschreibung (optional)" />
             <button type="submit" className="primary">Zur Sammlung hinzufügen</button>
             {manualMsg && <p className={manualErr ? "error" : "ok"}>{manualMsg}</p>}

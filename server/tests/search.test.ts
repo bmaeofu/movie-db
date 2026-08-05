@@ -113,3 +113,43 @@ describe("TMDB-Suche", () => {
     expect(noQ.status).toBe(400);
   });
 });
+
+describe("TMDB-Details-Anreicherung", () => {
+  it("mappt Länder (deutsche Namen), Regisseure, Autoren und Cast mit Rollen", async () => {
+    fetchMock.mockImplementation(async (url: URL | RequestInfo) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith("/genre/movie/list")) return jsonResponse({ genres: [] });
+      if (u.pathname.endsWith("/genre/tv/list")) return jsonResponse({ genres: [] });
+      if (u.pathname.endsWith("/configuration/countries")) {
+        return jsonResponse({ countries: [{ iso_3166_1: "DE", name: "Deutschland" }] });
+      }
+      if (u.pathname.endsWith("/movie/27205")) {
+        return jsonResponse({
+          id: 27205,
+          title: "Inception",
+          release_date: "2010-07-15",
+          genres: [],
+          poster_path: "/x.jpg",
+          overview: "o",
+          production_countries: [{ iso_3166_1: "DE", name: "Germany" }],
+          credits: {
+            crew: [
+              { name: "Christopher Nolan", job: "Director", department: "Directing" },
+              { name: "Christopher Nolan", job: "Writer", department: "Writing" },
+              { name: "Jonathan Nolan", job: "Writer", department: "Writing" },
+              { name: "Wally Pfister", job: "Cinematographer", department: "Camera" },
+            ],
+            cast: [{ name: "Leonardo DiCaprio", character: "Cobb" }],
+          },
+        });
+      }
+      return jsonResponse({});
+    });
+    const client = createTmdbClient({ apiKey: "k", fetchImpl: fetchMock });
+    const m = await client.details(27205, "film");
+    expect(m.land).toEqual(["Deutschland"]);
+    expect(m.regisseure).toEqual(["Christopher Nolan"]);
+    expect(m.autoren).toEqual(["Christopher Nolan", "Jonathan Nolan"]);
+    expect(m.cast).toEqual([{ name: "Leonardo DiCaprio", rolle: "Cobb" }]);
+  });
+});

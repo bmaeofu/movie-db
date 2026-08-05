@@ -6,6 +6,10 @@ export interface TmdbMovie {
   genres: string[];
   poster_url: string | null;
   overview: string | null;
+  land: string[];
+  regisseure: string[];
+  autoren: string[];
+  cast: { name: string; rolle: string }[];
 }
 
 export interface TmdbClient {
@@ -32,6 +36,7 @@ export function createTmdbClient(options: {
 
   let movieGenres: Map<number, string> | null = null;
   let tvGenres: Map<number, string> | null = null;
+  let countries: Map<string, string> | null = null;
 
   async function request<T>(path: string, params: Record<string, string>): Promise<T> {
     const url = new URL(TMDB_BASE + path);
@@ -75,6 +80,13 @@ export function createTmdbClient(options: {
     return map;
   }
 
+  async function countryNames(): Promise<Map<string, string>> {
+    if (countries) return countries;
+    const cfg = await request<{ countries: { iso_3166_1: string; name: string }[] }>("/configuration/countries", {});
+    countries = new Map(cfg.countries.map((c) => [c.iso_3166_1, c.name]));
+    return countries;
+  }
+
   function mapResult(raw: Record<string, any>, medientyp: "film" | "serie", genres: Map<number, string>): TmdbMovie {
     const date = raw.release_date ?? raw.first_air_date;
     return {
@@ -87,6 +99,10 @@ export function createTmdbClient(options: {
         .filter((g): g is string => Boolean(g)),
       poster_url: raw.poster_path ? POSTER_BASE + raw.poster_path : null,
       overview: raw.overview || null,
+      land: [],
+      regisseure: [],
+      autoren: [],
+      cast: [],
     };
   }
 
@@ -100,10 +116,33 @@ export function createTmdbClient(options: {
     },
     async details(tmdbId: number, medientyp: "film" | "serie"): Promise<TmdbMovie> {
       const path = medientyp === "film" ? `/movie/${tmdbId}` : `/tv/${tmdbId}`;
-      const raw = await request<any>(path, {});
+      const raw = await request<any>(path, { append_to_response: "credits" });
       const genres = await genreMap(medientyp);
       const genreIds = ((raw.genres ?? []) as { id: number }[]).map((g) => g.id);
-      return mapResult({ ...raw, genre_ids: genreIds }, medientyp, genres);
+      const movie = mapResult({ ...raw, genre_ids: genreIds }, medientyp, genres);
+      const credits = (raw.credits ?? {}) as { crew?: any[]; cast?: any[] };
+      const cn = await countryNames();
+      movie.land = ((raw.production_countries ?? []) as { iso_3166_1: string; name: string }[])
+        .map((c) => cn.get(c.iso_3166_1) ?? c.name)
+        .filter(Boolean);
+      if (medientyp === "film") {
+        movie.regisseure = (credits.crew ?? [])
+          .filter((c) => c.job === "Director")
+          .map((c) => c.name);
+      } else {
+        movie.regisseure = ((raw.created_by ?? []) as { name: string }[]).map((c) => c.name);
+      }
+      movie.autoren = Array.from(
+        new Set(
+          (credits.crew ?? [])
+            .filter((c) => c.department === "Writing")
+            .map((c) => c.name)
+        )
+      );
+      movie.cast = (credits.cast ?? [])
+        .slice(0, 15)
+        .map((c) => ({ name: c.name, rolle: c.character ?? "" }));
+      return movie;
     },
   };
 }

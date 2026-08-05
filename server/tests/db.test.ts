@@ -21,6 +21,17 @@ describe("Datenbankschema", () => {
     expect(() => initSchema(db)).not.toThrow();
   });
 
+  it("enthält die Detail-Spalten (land, regisseure, autoren, cast)", () => {
+    const db = createDb(":memory:");
+    const cols = db
+      .prepare("PRAGMA table_info(movies)")
+      .all()
+      .map((c: any) => c.name);
+    for (const c of ["land", "regisseure", "autoren", "cast"]) {
+      expect(cols).toContain(c);
+    }
+  });
+
   it("aktiviert WAL und Foreign Keys", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "fdb-"));
     const db = createDb(path.join(dir, "test.db"));

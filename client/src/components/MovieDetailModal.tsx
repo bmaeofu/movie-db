@@ -54,6 +54,16 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
         <h2>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h2>
         {movie.overview && <p className="overview">{movie.overview}</p>}
         <p className="genres">{movie.genres.join(", ")}</p>
+        {movie.land.length > 0 && <p className="genres">Land: {movie.land.join(", ")}</p>}
+        {movie.regisseure.length > 0 && <p className="genres">Regie: {movie.regisseure.join(", ")}</p>}
+        {movie.autoren.length > 0 && <p className="genres">Autoren: {movie.autoren.join(", ")}</p>}
+        {movie.cast.length > 0 && (
+          <ul className="cast-list">
+            {movie.cast.map((c, i) => (
+              <li key={i}>{c.name}{c.rolle ? ` → ${c.rolle}` : ""}</li>
+            ))}
+          </ul>
+        )}
         <p>Durchschnitt: ★ {movie.avg_rating ?? "–"} ({movie.rating_count} Bewertungen)</p>
 
         <div className="rating">

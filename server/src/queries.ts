@@ -8,6 +8,10 @@ export interface MovieView {
   genres: string[];
   poster_url: string | null;
   overview: string | null;
+  land: string[];
+  regisseure: string[];
+  autoren: string[];
+  cast: { name: string; rolle: string }[];
   added_at: string;
   added_by_name: string;
   avg_rating: number | null;
@@ -36,6 +40,7 @@ export function listMovieViews(
   const rows = db
     .prepare(
       `SELECT m.tmdb_id, m.titel, m.jahr, m.medientyp, m.genres, m.poster_url, m.overview,
+              m.land, m.regisseure, m.autoren, m."cast",
               c.added_at, u.name AS added_by_name,
               ROUND(AVG(r.sterne), 1) AS avg_rating, COUNT(r.user_id) AS rating_count,
               (SELECT sterne FROM ratings WHERE tmdb_id = m.tmdb_id AND user_id = @userId) AS my_rating,
@@ -56,6 +61,10 @@ export function listMovieViews(
   return rows.map((r) => ({
     ...r,
     genres: JSON.parse(r.genres),
+    land: JSON.parse(r.land),
+    regisseure: JSON.parse(r.regisseure),
+    autoren: JSON.parse(r.autoren),
+    cast: JSON.parse(r.cast),
     my_list_ids: r.my_list_ids ? JSON.parse(r.my_list_ids) : [],
     my_rating: r.my_rating ?? null,
     avg_rating: r.avg_rating ?? null,

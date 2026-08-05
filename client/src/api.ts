@@ -23,6 +23,10 @@ export interface Movie extends SearchResult {
   my_status: "schauen" | "gesehen" | "kein_interesse" | null;
   my_note: string | null;
   my_list_ids: number[];
+  land: string[];
+  regisseure: string[];
+  autoren: string[];
+  cast: { name: string; rolle: string }[];
 }
 
 export interface ListSummary {
@@ -75,11 +79,16 @@ export const api = {
     medientyp: string;
     genres?: string[];
     overview?: string | null;
+    land?: string[];
+    regisseure?: string[];
+    autoren?: string[];
+    cast?: { name: string; rolle: string }[];
   }) =>
     request<{ message: string; tmdb_id: number }>("/api/collection/custom", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  facets: () => request<{ laender: string[]; regisseure: string[] }>("/api/collection/facets"),
   removeFromCollection: (tmdbId: number) => request<void>(`/api/collection/${tmdbId}`, { method: "DELETE" }),
   setRating: (tmdbId: number, sterne: number) =>
     request<void>(`/api/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),

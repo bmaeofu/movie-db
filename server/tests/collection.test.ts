@@ -6,9 +6,9 @@ import { createDb } from "../src/db.js";
 import type { TmdbClient, TmdbMovie } from "../src/tmdb.js";
 
 const filme: Record<number, TmdbMovie> = {
-  27205: { tmdb_id: 27205, titel: "Inception", jahr: 2010, medientyp: "film", genres: ["Action"], poster_url: null, overview: "Traum" },
-  157336: { tmdb_id: 157336, titel: "Interstellar", jahr: 2014, medientyp: "film", genres: ["Science Fiction"], poster_url: null, overview: "Wurmloch" },
-  1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen" },
+  27205: { tmdb_id: 27205, titel: "Inception", jahr: 2010, medientyp: "film", genres: ["Action"], poster_url: null, overview: "Traum", land: [], regisseure: [], autoren: [], cast: [] },
+  157336: { tmdb_id: 157336, titel: "Interstellar", jahr: 2014, medientyp: "film", genres: ["Science Fiction"], poster_url: null, overview: "Wurmloch", land: [], regisseure: [], autoren: [], cast: [] },
+  1399: { tmdb_id: 1399, titel: "Game of Thrones", jahr: 2011, medientyp: "serie", genres: ["Drama"], poster_url: null, overview: "Drachen", land: [], regisseure: [], autoren: [], cast: [] },
 };
 
 const fakeTmdb: TmdbClient = {
@@ -76,6 +76,28 @@ describe("Sammlung", () => {
     expect(typ.body.map((m: any) => m.tmdb_id)).toEqual([1399]);
     const status = await request(app).get("/api/collection?status=gesehen").set("Cookie", annaCookie);
     expect(status.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
+  });
+
+  it("filtert nach Land, Regisseur und Freitext und liefert Facetten", async () => {
+    db.prepare(
+      `UPDATE movies SET land = '["Deutschland","USA"]', regisseure = '["Christopher Nolan"]',
+       autoren = '["Jonathan Nolan"]', "cast" = '[{"name":"Leonardo DiCaprio","rolle":"Cobb"}]' WHERE tmdb_id = 27205`
+    ).run();
+    const land = await request(app).get("/api/collection?land=Deutschland").set("Cookie", annaCookie);
+    expect(land.body.map((m: any) => m.tmdb_id)).toContain(27205);
+    const reg = await request(app).get("/api/collection?regisseur=Nolan").set("Cookie", annaCookie);
+    expect(reg.body.map((m: any) => m.tmdb_id)).toContain(27205);
+    const text = await request(app).get("/api/collection?text=DiCaprio").set("Cookie", annaCookie);
+    expect(text.body.map((m: any) => m.tmdb_id)).toContain(27205);
+    const negativ = await request(app).get("/api/collection?text=Ganzanders").set("Cookie", annaCookie);
+    expect(negativ.body.map((m: any) => m.tmdb_id)).not.toContain(27205);
+    const facets = await request(app).get("/api/collection/facets").set("Cookie", annaCookie);
+    expect(facets.body.laender).toContain("Deutschland");
+    expect(facets.body.regisseure).toContain("Christopher Nolan");
+    const film = await request(app).get("/api/collection").set("Cookie", annaCookie);
+    const inception = film.body.find((m: any) => m.tmdb_id === 27205);
+    expect(inception.land).toEqual(["Deutschland", "USA"]);
+    expect(inception.cast).toEqual([{ name: "Leonardo DiCaprio", rolle: "Cobb" }]);
   });
 
   it("sortiert nach Bewertung absteigend", async () => {

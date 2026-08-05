@@ -70,6 +70,19 @@ export function initSchema(db: Database.Database): void {
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  ensureColumn(db, "movies", "land", "land TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "movies", "regisseure", "regisseure TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "movies", "autoren", "autoren TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, "movies", "cast", "cast TEXT NOT NULL DEFAULT '[]'");
+}
+
+/** Fügt eine Spalte hinzu, falls sie fehlt (Migration für Bestands-DBs). */
+function ensureColumn(db: Database.Database, table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
 }
 
 export function createDb(dbPath: string): Database.Database {

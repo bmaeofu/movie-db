@@ -7,27 +7,38 @@ import MovieDetailModal from "../components/MovieDetailModal";
 export default function CollectionPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [q, setQ] = useState("");
+  const [text, setText] = useState("");
   const [genre, setGenre] = useState("");
+  const [land, setLand] = useState("");
+  const [regisseur, setRegisseur] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
+  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[] }>({ laender: [], regisseure: [] });
   const [searchOpen, setSearchOpen] = useState(false);
   const [detail, setDetail] = useState<Movie | null>(null);
 
   const load = useCallback(async () => {
     const filters: Record<string, string> = { sort };
     if (q) filters.q = q;
+    if (text) filters.text = text;
     if (genre) filters.genre = genre;
+    if (land) filters.land = land;
+    if (regisseur) filters.regisseur = regisseur;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
     const fresh = await api.collection(filters);
     setMovies(fresh);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, genre, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, medientyp, status, sort]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    api.facets().then(setFacets).catch(() => {});
+  }, []);
 
   const genres = [...new Set(movies.flatMap((m) => m.genres))].sort();
 
@@ -35,10 +46,23 @@ export default function CollectionPage() {
     <main className="page">
       <div className="filterbar">
         <input placeholder="Titel suchen…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder="Alle Felder durchsuchen…" value={text} onChange={(e) => setText(e.target.value)} />
         <select value={genre} onChange={(e) => setGenre(e.target.value)}>
           <option value="">Alle Genres</option>
           {genres.map((g) => (
             <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+        <select value={land} onChange={(e) => setLand(e.target.value)}>
+          <option value="">Alle Länder</option>
+          {facets.laender.map((l) => (
+            <option key={l} value={l}>{l}</option>
+          ))}
+        </select>
+        <select value={regisseur} onChange={(e) => setRegisseur(e.target.value)}>
+          <option value="">Alle Regisseure</option>
+          {facets.regisseure.map((r) => (
+            <option key={r} value={r}>{r}</option>
           ))}
         </select>
         <select value={medientyp} onChange={(e) => setMedientyp(e.target.value)}>

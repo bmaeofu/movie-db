@@ -15,6 +15,10 @@ const fakeTmdb: TmdbClient = {
     genres: ["Action"],
     poster_url: null,
     overview: null,
+    land: [],
+    regisseure: [],
+    autoren: [],
+    cast: [],
   }),
 };
 
