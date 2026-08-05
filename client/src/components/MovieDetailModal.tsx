@@ -12,19 +12,24 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
   const [inLists, setInLists] = useState<Set<number>>(new Set(movie.my_list_ids));
   const [note, setNote] = useState(movie.my_note ?? "");
   const [saved, setSaved] = useState("");
+  const [savedIsError, setSavedIsError] = useState(false);
 
   useEffect(() => {
     api.lists().then(setLists).catch(() => {});
   }, []);
 
-  async function change(action: () => Promise<void>, okText: string) {
+  async function change(action: () => Promise<void>, okText: string): Promise<boolean> {
     setSaved("");
+    setSavedIsError(false);
     try {
       await action();
       setSaved(okText);
       onChanged();
+      return true;
     } catch (err) {
       setSaved(err instanceof Error ? err.message : "Fehler");
+      setSavedIsError(true);
+      return false;
     }
   }
 
@@ -32,12 +37,15 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
     const next = new Set(inLists);
     if (next.has(listId)) {
       next.delete(listId);
-      await change(() => api.removeFromList(listId, movie.tmdb_id), "Aus Liste entfernt.");
+      if (await change(() => api.removeFromList(listId, movie.tmdb_id), "Aus Liste entfernt.")) {
+        setInLists(next);
+      }
     } else {
       next.add(listId);
-      await change(() => api.addToList(listId, movie.tmdb_id), "Zur Liste hinzugefügt.");
+      if (await change(() => api.addToList(listId, movie.tmdb_id), "Zur Liste hinzugefügt.")) {
+        setInLists(next);
+      }
     }
-    setInLists(next);
   }
 
   return (
@@ -91,7 +99,7 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
           {lists.length === 0 && <span className="muted">Noch keine Listen – unter „Listen" anlegen.</span>}
         </div>
 
-        {saved && <p className={saved.startsWith("Fehler") ? "error" : "ok"}>{saved}</p>}
+        {saved && <p className={savedIsError ? "error" : "ok"}>{saved}</p>}
         <button onClick={onClose}>Schließen</button>
       </div>
     </div>
