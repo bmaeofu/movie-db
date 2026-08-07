@@ -6,10 +6,10 @@ function jsonResponse(body: unknown): Response {
 }
 
 describe("OMDb-Client", () => {
-  it("parst die IMDb-Bewertung aus einer erfolgreichen Antwort", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ Response: "True", imdbRating: "8.1", imdbVotes: "1234" }));
+  it("parst IMDb-Bewertung und Stimmen aus einer erfolgreichen Antwort", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ Response: "True", imdbRating: "8.1", imdbVotes: "1,234" }));
     const client = createOmdbClient({ apiKey: "k", fetchImpl: fetchMock as any });
-    expect(await client.rating("tt1375666")).toBe(8.1);
+    expect(await client.rating("tt1375666")).toEqual({ bewertung: 8.1, stimmen: 1234 });
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain("apikey=k");
     expect(url).toContain("i=tt1375666");

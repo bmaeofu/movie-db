@@ -71,16 +71,16 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
 
   const upsertMovie = db.prepare(
     `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, source)
+                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, source)
      VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
-             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @source)
+             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @source)
      ON CONFLICT(tmdb_id) DO UPDATE SET
        titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
        genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
        tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
        autoren = excluded.autoren, "cast" = excluded.cast, tmdb_bewertung = excluded.tmdb_bewertung,
        tmdb_stimmen = excluded.tmdb_stimmen, imdb_bewertung = excluded.imdb_bewertung,
-       zuletzt_aktualisiert = datetime('now')`
+       imdb_stimmen = excluded.imdb_stimmen, zuletzt_aktualisiert = datetime('now')`
   );
 
   router.post(
@@ -162,12 +162,13 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
   router.post(
     "/",
     asyncHandler(async (req, res) => {
-      const { tmdb_id, medientyp, source, tmdb_bewertung, imdb_bewertung } = (req.body ?? {}) as {
+      const { tmdb_id, medientyp, source, tmdb_bewertung, imdb_bewertung, imdb_stimmen } = (req.body ?? {}) as {
         tmdb_id?: unknown;
         medientyp?: unknown;
         source?: unknown;
         tmdb_bewertung?: unknown;
         imdb_bewertung?: unknown;
+        imdb_stimmen?: unknown;
       };
       if (typeof tmdb_id !== "number" || !Number.isInteger(tmdb_id) || (medientyp !== "film" && medientyp !== "serie")) {
         res.status(400).json({ error: "tmdb_id (Integer) und medientyp ('film'|'serie') erforderlich" });
@@ -186,8 +187,17 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         res.status(400).json({ error: "Bewertungen müssen Zahlen zwischen 0 und 10 sein" });
         return;
       }
+      if (
+        imdb_stimmen !== undefined &&
+        imdb_stimmen !== null &&
+        (typeof imdb_stimmen !== "number" || !Number.isInteger(imdb_stimmen) || imdb_stimmen < 0)
+      ) {
+        res.status(400).json({ error: "imdb_stimmen muss eine nicht-negative ganze Zahl sein" });
+        return;
+      }
+      const forceRatings = req.query.force_ratings === "1";
       const existing = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?").get(tmdb_id);
-      if (existing) {
+      if (existing && !forceRatings) {
         res.status(200).json({ message: "Bereits in der Sammlung" });
         return;
       }
@@ -200,11 +210,19 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       }
       let finalTmdb = movie.tmdb_bewertung;
       let finalImdb: number | null = null;
+      let finalImdbStimmen: number | null = null;
       if (numOk(tmdb_bewertung)) finalTmdb = tmdb_bewertung;
       if (numOk(imdb_bewertung)) {
         finalImdb = imdb_bewertung;
+        if (typeof imdb_stimmen === "number" && Number.isInteger(imdb_stimmen) && imdb_stimmen >= 0) {
+          finalImdbStimmen = imdb_stimmen;
+        }
       } else if (omdb && req.query.skip_omdb !== "1") {
-        finalImdb = await omdb.rating(movie.imdb_id);
+        const omdbData = await omdb.rating(movie.imdb_id);
+        if (omdbData) {
+          finalImdb = omdbData.bewertung;
+          finalImdbStimmen = omdbData.stimmen;
+        }
       }
       upsertMovie.run({
         tmdb_id: movie.tmdb_id,
@@ -222,13 +240,18 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         tmdb_bewertung: finalTmdb,
         tmdb_stimmen: movie.tmdb_stimmen,
         imdb_bewertung: finalImdb,
+        imdb_stimmen: finalImdbStimmen,
         source: (source as string) ?? "user",
       });
-      const user = (req as AuthedRequest).user;
-      db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);
-      // Neu aufgenommen → Status 'neu' für ALLE Benutzer (bestehende Status bleiben erhalten)
-      db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(tmdb_id);
-      res.status(201).json({ message: "Zur Sammlung hinzugefügt" });
+      if (!existing) {
+        const user = (req as AuthedRequest).user;
+        db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);
+        // Neu aufgenommen → Status 'neu' für ALLE Benutzer
+        db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(tmdb_id);
+        res.status(201).json({ message: "Zur Sammlung hinzugefügt" });
+      } else {
+        res.status(200).json({ message: "Ratings aktualisiert" });
+      }
     })
   );
 

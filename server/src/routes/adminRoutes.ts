@@ -10,7 +10,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
 
   const updateEnriched = db.prepare(
     `UPDATE movies SET land = ?, regisseure = ?, autoren = ?, "cast" = ?, tmdb_bewertung = ?, tmdb_stimmen = ?,
-     imdb_bewertung = ?, zuletzt_aktualisiert = datetime('now')
+     imdb_bewertung = ?, imdb_stimmen = ?, zuletzt_aktualisiert = datetime('now')
      WHERE tmdb_id = ?`
   );
 
@@ -38,7 +38,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
           const useOmdb = omdb !== undefined && omdbCalls < omdbLimit;
-          const imdb_bewertung = useOmdb ? await omdb!.rating(m.imdb_id) : null;
+          const omdbData = useOmdb ? await omdb!.rating(m.imdb_id) : null;
           if (useOmdb) omdbCalls++;
           updateEnriched.run(
             JSON.stringify(m.land),
@@ -47,7 +47,8 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             JSON.stringify(m.cast),
             m.tmdb_bewertung,
             m.tmdb_stimmen,
-            imdb_bewertung,
+            omdbData?.bewertung ?? null,
+            omdbData?.stimmen ?? null,
             row.tmdb_id
           );
           updated.push(row.tmdb_id);

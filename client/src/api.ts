@@ -30,6 +30,7 @@ export interface Movie extends SearchResult {
   tmdb_bewertung: number | null;
   tmdb_stimmen: number | null;
   imdb_bewertung: number | null;
+  imdb_stimmen: number | null;
   source: string;
 }
 

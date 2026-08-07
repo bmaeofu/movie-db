@@ -15,6 +15,7 @@ export interface MovieView {
   tmdb_bewertung: number | null;
   tmdb_stimmen: number | null;
   imdb_bewertung: number | null;
+  imdb_stimmen: number | null;
   source: string;
   added_at: string;
   added_by_name: string;
@@ -44,7 +45,7 @@ export function listMovieViews(
   const rows = db
     .prepare(
       `SELECT m.tmdb_id, m.titel, m.jahr, m.medientyp, m.genres, m.poster_url, m.overview,
-              m.land, m.regisseure, m.autoren, m."cast", m.tmdb_bewertung, m.tmdb_stimmen, m.imdb_bewertung, m.source,
+              m.land, m.regisseure, m.autoren, m."cast", m.tmdb_bewertung, m.tmdb_stimmen, m.imdb_bewertung, m.imdb_stimmen, m.source,
               c.added_at, u.name AS added_by_name,
               ROUND(AVG(r.sterne), 1) AS avg_rating, COUNT(r.user_id) AS rating_count,
               (SELECT sterne FROM ratings WHERE tmdb_id = m.tmdb_id AND user_id = @userId) AS my_rating,

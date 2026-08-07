@@ -23,6 +23,7 @@ export function initSchema(db: Database.Database): void {
       tmdb_bewertung REAL,
       tmdb_stimmen INTEGER,
       imdb_bewertung REAL,
+      imdb_stimmen INTEGER,
       source TEXT NOT NULL DEFAULT 'user',
       zuletzt_aktualisiert TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -82,6 +83,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "tmdb_bewertung", "tmdb_bewertung REAL");
   ensureColumn(db, "movies", "tmdb_stimmen", "tmdb_stimmen INTEGER");
   ensureColumn(db, "movies", "imdb_bewertung", "imdb_bewertung REAL");
+  ensureColumn(db, "movies", "imdb_stimmen", "imdb_stimmen INTEGER");
   ensureColumn(db, "movies", "source", "source TEXT NOT NULL DEFAULT 'user'");
 
   // Migration: watch_status-CHECK um 'neu' erweitern (Bestands-DBs; SQLite kann CHECKs nicht per ALTER ändern)

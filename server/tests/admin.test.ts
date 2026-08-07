@@ -34,7 +34,7 @@ describe("Admin-Backfill", () => {
   };
 
   const fakeOmdb: OmdbClient = {
-    rating: vi.fn(async (imdbId: string | null) => (imdbId ? 8.2 : null)),
+    rating: vi.fn(async (imdbId: string | null) => (imdbId ? { bewertung: 8.2, stimmen: 12345 } : null)),
   };
 
   beforeEach(async () => {
@@ -60,7 +60,7 @@ describe("Admin-Backfill", () => {
     const first = await request(app).post("/api/admin/backfill").set("Cookie", adminCookie);
     expect(first.status).toBe(200);
     expect(first.body.updated).toBe(1); // nur tmdb 27205, Custom (-1) übersprungen
-    const row = db.prepare('SELECT land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung FROM movies WHERE tmdb_id = 27205').get() as {
+    const row = db.prepare('SELECT land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id = 27205').get() as {
       land: string;
       regisseure: string;
       autoren: string;
@@ -72,6 +72,7 @@ describe("Admin-Backfill", () => {
     expect(row.tmdb_bewertung).toBe(7.5);
     expect(row.tmdb_stimmen).toBe(100);
     expect(row.imdb_bewertung).toBe(8.2);
+    expect(row.imdb_stimmen).toBe(12345);
     const custom = db.prepare("SELECT land FROM movies WHERE tmdb_id < 0").get() as { land: string };
     expect(JSON.parse(custom.land)).toEqual([]);
     const second = await request(app).post("/api/admin/backfill").set("Cookie", adminCookie);

@@ -65,21 +65,44 @@ describe("Sammlung", () => {
     const ok = await request(app)
       .post("/api/collection")
       .set("Cookie", annaCookie)
-      .send({ tmdb_id: 1236, medientyp: "film", source: "kodi", tmdb_bewertung: 7.5, imdb_bewertung: 8.1 });
+      .send({ tmdb_id: 1236, medientyp: "film", source: "kodi", tmdb_bewertung: 7.5, imdb_bewertung: 8.1, imdb_stimmen: 4321 });
     expect(ok.status).toBe(201);
-    const row = db.prepare("SELECT tmdb_bewertung, imdb_bewertung, source FROM movies WHERE tmdb_id = 1236").get() as {
+    const row = db.prepare("SELECT tmdb_bewertung, imdb_bewertung, imdb_stimmen, source FROM movies WHERE tmdb_id = 1236").get() as {
       tmdb_bewertung: number | null;
       imdb_bewertung: number | null;
+      imdb_stimmen: number | null;
       source: string;
     };
     expect(row.tmdb_bewertung).toBe(7.5);
     expect(row.imdb_bewertung).toBe(8.1);
+    expect(row.imdb_stimmen).toBe(4321);
     expect(row.source).toBe("kodi");
     const bad = await request(app)
       .post("/api/collection")
       .set("Cookie", annaCookie)
       .send({ tmdb_id: 1236, medientyp: "film", imdb_bewertung: 11 });
     expect(bad.status).toBe(400);
+    const badVotes = await request(app)
+      .post("/api/collection")
+      .set("Cookie", annaCookie)
+      .send({ tmdb_id: 1236, medientyp: "film", imdb_stimmen: -5 });
+    expect(badVotes.status).toBe(400);
+  });
+
+  it("force_ratings aktualisiert Bewertungen bestehender Filme ohne Duplikat", async () => {
+    const upd = await request(app)
+      .post("/api/collection?force_ratings=1")
+      .set("Cookie", annaCookie)
+      .send({ tmdb_id: 27205, medientyp: "film", imdb_bewertung: 9.9, imdb_stimmen: 999 });
+    expect(upd.status).toBe(200);
+    const row = db.prepare("SELECT imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id = 27205").get() as {
+      imdb_bewertung: number | null;
+      imdb_stimmen: number | null;
+    };
+    expect(row.imdb_bewertung).toBe(9.9);
+    expect(row.imdb_stimmen).toBe(999);
+    const anzahl = db.prepare("SELECT COUNT(*) AS n FROM collection WHERE tmdb_id = 27205").get() as { n: number };
+    expect(anzahl.n).toBe(1); // kein Duplikat
   });
 
   it("fügt einen Film hinzu (erzeugt movies- und collection-Zeile)", async () => {

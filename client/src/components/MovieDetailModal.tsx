@@ -61,7 +61,9 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
               <span>TMDB: {movie.tmdb_bewertung.toFixed(1)}{movie.tmdb_stimmen ? ` (${movie.tmdb_stimmen.toLocaleString("de-DE")} Stimmen)` : ""}</span>
             )}
             {movie.tmdb_bewertung !== null && movie.imdb_bewertung !== null && " · "}
-            {movie.imdb_bewertung !== null && <span>IMDb: {movie.imdb_bewertung.toFixed(1)}</span>}
+            {movie.imdb_bewertung !== null && (
+              <span>IMDb: {movie.imdb_bewertung.toFixed(1)}{movie.imdb_stimmen ? ` (${movie.imdb_stimmen.toLocaleString("de-DE")} Stimmen)` : ""}</span>
+            )}
           </p>
         )}
         {movie.land.length > 0 && <p className="genres">Land: {movie.land.join(", ")}</p>}
