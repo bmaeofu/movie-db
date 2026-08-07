@@ -121,9 +121,11 @@ input, select, textarea {
 .cast-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
 .cast-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; }
 .cast-photo {
-  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
-  border: 1px solid #33404b; flex-shrink: 0;
+  width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+  border: 2px solid #33404b; flex-shrink: 0;
 }
+.cast-item.clickable { cursor: pointer; }
+.cast-item.clickable:hover { color: var(--accent); }
 .rating, .status, .note, .lists { display: flex; gap: 0.4rem; align-items: center; margin: 0.7rem 0; flex-wrap: wrap; }
 .note textarea { flex: 1; min-width: 200px; }
 .lists label { display: flex; gap: 0.3rem; align-items: center; }

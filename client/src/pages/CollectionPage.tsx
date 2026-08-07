@@ -183,7 +183,18 @@ export default function CollectionPage() {
       )}
 
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={() => void load()} />}
-      {detail && <MovieDetailModal movie={detail} onClose={() => setDetail(null)} onChanged={() => void load()} />}
+      {detail && (
+        <MovieDetailModal
+          movie={detail}
+          onClose={() => setDetail(null)}
+          onChanged={() => void load()}
+          onSelectActor={(name) => {
+            setSchauspieler(name);
+            setSchauspielerInput(name);
+            setDetail(null);
+          }}
+        />
+      )}
     </main>
   );
 }

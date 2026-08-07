@@ -8,7 +8,17 @@ const STATUS_OPTIONS: Array<["neu" | "schauen" | "gesehen" | "kein_interesse", s
   ["kein_interesse", "Kein Interesse"],
 ];
 
-export default function MovieDetailModal({ movie, onClose, onChanged }: { movie: Movie; onClose: () => void; onChanged: () => void }) {
+export default function MovieDetailModal({
+  movie,
+  onClose,
+  onChanged,
+  onSelectActor,
+}: {
+  movie: Movie;
+  onClose: () => void;
+  onChanged: () => void;
+  onSelectActor?: (name: string) => void;
+}) {
   const [lists, setLists] = useState<ListSummary[]>([]);
   const [inLists, setInLists] = useState<Set<number>>(new Set(movie.my_list_ids));
   const [note, setNote] = useState(movie.my_note ?? "");
@@ -90,7 +100,12 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
             </div>
             <ul className="cast-list">
               {movie.cast.map((c, i) => (
-                <li key={i} className="cast-item">
+                <li
+                  key={i}
+                  className={`cast-item${onSelectActor ? " clickable" : ""}`}
+                  onClick={onSelectActor ? () => onSelectActor(c.name) : undefined}
+                  title={onSelectActor ? `In Schauspieler-Filter übernehmen: ${c.name}` : undefined}
+                >
                   {showPictures && (
                     <img
                       className="cast-photo"
