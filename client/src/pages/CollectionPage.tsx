@@ -95,7 +95,7 @@ export default function CollectionPage() {
       <div
         className="filterbar"
         onKeyDown={(e) => {
-          if (e.key === "Escape" && e.ctrlKey) resetFilters();
+          if (e.key === "Escape") resetFilters();
         }}
       >
         <input placeholder="Titel suchen…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -190,8 +190,7 @@ export default function CollectionPage() {
       </div>
 
       <p className="stat">
-        {count ?? "–"} von {total ?? "–"} Filmen · Sortierung: {SORT_LABELS[sort] ?? sort}{" "}
-        <span className="hint">(Strg+ESC = Filter zurücksetzen)</span>
+        {count ?? "–"} von {total ?? "–"} Filmen · Sortierung: {SORT_LABELS[sort] ?? sort}
       </p>
 
       {movies.length === 0 ? (

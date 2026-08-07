@@ -77,7 +77,6 @@ input, select, textarea {
 .filterbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
 .filterbar input { flex: 1; min-width: 180px; }
 .stat { color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }
-.hint { opacity: 0.7; }
 .actor-photo {
   width: 72px; height: 72px; border-radius: 50%; object-fit: cover;
   border: 2px solid #33404b;
