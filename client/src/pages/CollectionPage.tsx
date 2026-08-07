@@ -90,6 +90,20 @@ export default function CollectionPage() {
     setSort("zuletzt_hinzugefuegt");
   }
 
+  const hasFilter =
+    q !== "" ||
+    text !== "" ||
+    genre !== "" ||
+    land !== "" ||
+    regisseur !== "" ||
+    schauspieler !== "" ||
+    jahr !== "" ||
+    tmdbWert !== "" ||
+    imdbWert !== "" ||
+    medientyp !== "" ||
+    status !== "" ||
+    sort !== "zuletzt_hinzugefuegt";
+
   return (
     <main className="page">
       <div
@@ -187,6 +201,7 @@ export default function CollectionPage() {
           <option value="imdb_bewertung">Beste IMDb-Bewertung</option>
         </select>
         <button className="primary" onClick={() => setSearchOpen(true)}>+ Film hinzufügen</button>
+        <button onClick={resetFilters} disabled={!hasFilter}>Alle anzeigen</button>
       </div>
 
       <p className="stat">
