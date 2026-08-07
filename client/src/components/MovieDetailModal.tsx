@@ -14,9 +14,20 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
   const [note, setNote] = useState(movie.my_note ?? "");
   const [saved, setSaved] = useState("");
   const [savedIsError, setSavedIsError] = useState(false);
+  const [showPictures, setShowPictures] = useState(false);
 
   useEffect(() => {
     api.lists().then(setLists).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (e.key.toLowerCase() === "p") setShowPictures((v) => !v);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   async function change(action: () => Promise<void>, okText: string): Promise<boolean> {
@@ -70,11 +81,30 @@ export default function MovieDetailModal({ movie, onClose, onChanged }: { movie:
         {movie.regisseure.length > 0 && <p className="genres">Regie: {movie.regisseure.join(", ")}</p>}
         {movie.autoren.length > 0 && <p className="genres">Autoren: {movie.autoren.join(", ")}</p>}
         {movie.cast.length > 0 && (
-          <ul className="cast-list">
-            {movie.cast.map((c, i) => (
-              <li key={i}>{c.name}{c.rolle ? ` → ${c.rolle}` : ""}</li>
-            ))}
-          </ul>
+          <>
+            <div className="cast-head">
+              <span>Besetzung:</span>
+              <button onClick={() => setShowPictures((v) => !v)}>
+                {showPictures ? "Bilder ausblenden (P)" : "Bilder zeigen (P)"}
+              </button>
+            </div>
+            <ul className="cast-list">
+              {movie.cast.map((c, i) => (
+                <li key={i} className="cast-item">
+                  {showPictures && (
+                    <img
+                      className="cast-photo"
+                      src={api.actorImageUrl(c.name)}
+                      alt={c.name}
+                      loading="lazy"
+                      onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                    />
+                  )}
+                  <span>{c.name}{c.rolle ? ` → ${c.rolle}` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
         <p>Durchschnitt: ★ {movie.avg_rating ?? "–"} ({movie.rating_count} Bewertungen)</p>
 

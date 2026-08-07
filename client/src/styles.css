@@ -118,7 +118,12 @@ input, select, textarea {
 .movie-detail .overview { color: var(--muted); }
 .movie-detail .genres { color: var(--muted); font-size: 0.85rem; }
 .cast-list { list-style: none; padding: 0; margin: 0.4rem 0; color: var(--muted); font-size: 0.85rem; }
-.cast-list li { padding: 0.1rem 0; }
+.cast-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+.cast-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; }
+.cast-photo {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  border: 1px solid #33404b; flex-shrink: 0;
+}
 .rating, .status, .note, .lists { display: flex; gap: 0.4rem; align-items: center; margin: 0.7rem 0; flex-wrap: wrap; }
 .note textarea { flex: 1; min-width: 200px; }
 .lists label { display: flex; gap: 0.3rem; align-items: center; }
