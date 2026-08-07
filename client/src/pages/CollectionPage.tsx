@@ -193,6 +193,18 @@ export default function CollectionPage() {
             setSchauspielerInput(name);
             setDetail(null);
           }}
+          onSelectGenre={(g) => {
+            setGenre(g);
+            setDetail(null);
+          }}
+          onSelectLand={(l) => {
+            setLand(l);
+            setDetail(null);
+          }}
+          onSelectRegisseur={(r) => {
+            setRegisseur(r);
+            setDetail(null);
+          }}
         />
       )}
     </main>

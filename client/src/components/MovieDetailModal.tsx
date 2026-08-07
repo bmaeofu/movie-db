@@ -13,11 +13,17 @@ export default function MovieDetailModal({
   onClose,
   onChanged,
   onSelectActor,
+  onSelectGenre,
+  onSelectLand,
+  onSelectRegisseur,
 }: {
   movie: Movie;
   onClose: () => void;
   onChanged: () => void;
   onSelectActor?: (name: string) => void;
+  onSelectGenre?: (genre: string) => void;
+  onSelectLand?: (land: string) => void;
+  onSelectRegisseur?: (name: string) => void;
 }) {
   const [lists, setLists] = useState<ListSummary[]>([]);
   const [inLists, setInLists] = useState<Set<number>>(new Set(movie.my_list_ids));
@@ -75,7 +81,11 @@ export default function MovieDetailModal({
       <div className="modal movie-detail" onClick={(e) => e.stopPropagation()}>
         <h2>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h2>
         {movie.overview && <p className="overview">{movie.overview}</p>}
-        <p className="genres">{movie.genres.join(", ")}</p>
+        {movie.genres.length > 0 && (
+          <p className="genres">Genres: {movie.genres.map((g) => (
+            <button key={g} className="chip" onClick={onSelectGenre ? () => onSelectGenre(g) : undefined}>{g}</button>
+          ))}</p>
+        )}
         {(movie.tmdb_bewertung !== null || movie.imdb_bewertung !== null) && (
           <p className="genres">
             {movie.tmdb_bewertung !== null && (
@@ -87,8 +97,16 @@ export default function MovieDetailModal({
             )}
           </p>
         )}
-        {movie.land.length > 0 && <p className="genres">Land: {movie.land.join(", ")}</p>}
-        {movie.regisseure.length > 0 && <p className="genres">Regie: {movie.regisseure.join(", ")}</p>}
+        {movie.land.length > 0 && (
+          <p className="genres">Land: {movie.land.map((l) => (
+            <button key={l} className="chip" onClick={onSelectLand ? () => onSelectLand(l) : undefined}>{l}</button>
+          ))}</p>
+        )}
+        {movie.regisseure.length > 0 && (
+          <p className="genres">Regie: {movie.regisseure.map((r) => (
+            <button key={r} className="chip" onClick={onSelectRegisseur ? () => onSelectRegisseur(r) : undefined}>{r}</button>
+          ))}</p>
+        )}
         {movie.autoren.length > 0 && <p className="genres">Autoren: {movie.autoren.join(", ")}</p>}
         {movie.cast.length > 0 && (
           <>

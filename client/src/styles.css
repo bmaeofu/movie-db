@@ -126,6 +126,11 @@ input, select, textarea {
 }
 .cast-item.clickable { cursor: pointer; }
 .cast-item.clickable:hover { color: var(--accent); }
+.chip {
+  background: #2a3540; border: none; border-radius: 999px;
+  padding: 0.1rem 0.6rem; margin-right: 0.3rem; font-size: 0.85rem;
+}
+.chip:hover { background: var(--accent); color: #0b0f12; }
 .rating, .status, .note, .lists { display: flex; gap: 0.4rem; align-items: center; margin: 0.7rem 0; flex-wrap: wrap; }
 .note textarea { flex: 1; min-width: 200px; }
 .lists label { display: flex; gap: 0.3rem; align-items: center; }
