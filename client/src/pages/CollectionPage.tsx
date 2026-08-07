@@ -11,6 +11,7 @@ export default function CollectionPage() {
   const [genre, setGenre] = useState("");
   const [land, setLand] = useState("");
   const [regisseur, setRegisseur] = useState("");
+  const [regisseurInput, setRegisseurInput] = useState("");
   const [schauspieler, setSchauspieler] = useState("");
   const [schauspielerInput, setSchauspielerInput] = useState("");
   const [jahr, setJahr] = useState("");
@@ -80,6 +81,7 @@ export default function CollectionPage() {
     setGenre("");
     setLand("");
     setRegisseur("");
+    setRegisseurInput("");
     setSchauspielerInput("");
     setSchauspieler("");
     setJahr("");
@@ -126,12 +128,25 @@ export default function CollectionPage() {
             <option key={l} value={l}>{l}</option>
           ))}
         </select>
-        <select value={regisseur} onChange={(e) => setRegisseur(e.target.value)}>
-          <option value="">Alle Regisseure</option>
-          {facets.regisseure.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
+        <input
+          list="regisseur-list"
+          placeholder="Regisseur suchen…"
+          value={regisseurInput}
+          onChange={(e) => {
+            const v = e.target.value;
+            setRegisseurInput(v);
+            if (facets.regisseure.includes(v)) setRegisseur(v);
+            else setRegisseur("");
+          }}
+        />
+        <datalist id="regisseur-list">
+          {facets.regisseure
+            .filter((r) => r.toLowerCase().includes(regisseurInput.toLowerCase()))
+            .slice(0, 200)
+            .map((r) => (
+              <option key={r} value={r} />
+            ))}
+        </datalist>
         <input
           list="schauspieler-list"
           placeholder="Schauspieler suchen…"
