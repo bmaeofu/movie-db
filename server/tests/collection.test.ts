@@ -206,6 +206,16 @@ describe("Sammlung", () => {
     expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
   });
 
+  it("filtert unterhalb einer Bewertung (tmdb_max/imdb_max)", async () => {
+    db.prepare("UPDATE movies SET tmdb_bewertung = 4.2, imdb_bewertung = 4.8 WHERE tmdb_id = 27205").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 6.4, imdb_bewertung = 6.1 WHERE tmdb_id = 157336").run();
+    db.prepare("UPDATE movies SET tmdb_bewertung = 8.3, imdb_bewertung = NULL WHERE tmdb_id = 1399").run();
+    const tmdb = await request(app).get("/api/collection?tmdb_max=5").set("Cookie", annaCookie);
+    expect(tmdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
+    const imdb = await request(app).get("/api/collection?imdb_max=5").set("Cookie", annaCookie);
+    expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
+  });
+
   it("count liefert die Trefferzahl mit denselben Filtern", async () => {
     const alle = await request(app).get("/api/collection/count").set("Cookie", annaCookie);
     expect(alle.body).toEqual({ count: 3 });

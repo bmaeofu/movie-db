@@ -14,6 +14,8 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const jahrParam = typeof query.jahr === "string" ? query.jahr.trim() : "";
   const tmdbMin = Number(query.tmdb_min);
   const imdbMin = Number(query.imdb_min);
+  const tmdbMax = Number(query.tmdb_max);
+  const imdbMax = Number(query.imdb_max);
   const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
   const status = typeof query.status === "string" ? query.status : "";
 
@@ -53,6 +55,14 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   if (Number.isFinite(imdbMin) && imdbMin >= 0 && imdbMin <= 10) {
     where.push("m.imdb_bewertung >= @imdbMin");
     params.imdbMin = imdbMin;
+  }
+  if (Number.isFinite(tmdbMax) && tmdbMax >= 0 && tmdbMax <= 10) {
+    where.push("m.tmdb_bewertung < @tmdbMax");
+    params.tmdbMax = tmdbMax;
+  }
+  if (Number.isFinite(imdbMax) && imdbMax >= 0 && imdbMax <= 10) {
+    where.push("m.imdb_bewertung < @imdbMax");
+    params.imdbMax = imdbMax;
   }
   if (medientyp === "film" || medientyp === "serie") {
     where.push("m.medientyp = @medientyp");
