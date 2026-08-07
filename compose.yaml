@@ -9,4 +9,5 @@ services:
       - OMDB_API_KEY=${OMDB_API_KEY}
     volumes:
       - /mnt/user/appdata/movie-db:/data
+      - /mnt/user/media/tv/FilmeHD:/media:ro
     restart: unless-stopped

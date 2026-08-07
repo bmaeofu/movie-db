@@ -70,5 +70,41 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     })
   );
 
+  /**
+   * Übernimmt Schauspieler-Fotos (Name → Bildquelle) aus einer externen Quelle (Kodi art-Tabelle).
+   * bild: entweder vollständige http(s)-URL oder lokaler Pfad relativ zum gemounteten Medien-Ordner (beginnt mit '/').
+   */
+  router.post(
+    "/actors",
+    asyncHandler(async (req, res) => {
+      const list = (req.body ?? {}).actors;
+      if (!Array.isArray(list) || list.length > 2000) {
+        res.status(400).json({ error: "actors: Array (max. 2000 Einträge) erforderlich" });
+        return;
+      }
+      const ok = list.every(
+        (a: unknown) =>
+          a !== null &&
+          typeof a === "object" &&
+          typeof (a as any).name === "string" &&
+          (a as any).name.trim().length > 0 &&
+          typeof (a as any).bild === "string" &&
+          ((a as any).bild.startsWith("http") || (a as any).bild.startsWith("/"))
+      );
+      if (!ok) {
+        res.status(400).json({ error: "Jeder Eintrag braucht name (String) und bild (http-URL oder lokaler Pfad)" });
+        return;
+      }
+      const upsert = db.prepare(
+        `INSERT INTO actors (name, bild, zuletzt_aktualisiert) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(name) DO UPDATE SET bild = excluded.bild, zuletzt_aktualisiert = datetime('now')`
+      );
+      for (const a of list as { name: string; bild: string }[]) {
+        upsert.run(a.name.trim(), a.bild);
+      }
+      res.json({ imported: list.length });
+    })
+  );
+
   return router;
 }

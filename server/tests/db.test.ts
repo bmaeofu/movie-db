@@ -11,7 +11,7 @@ describe("Datenbankschema", () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all()
       .map((r: any) => r.name);
-    for (const t of ["users", "movies", "collection", "ratings", "watch_status", "notes", "sessions", "lists", "list_items", "search_cache"]) {
+    for (const t of ["users", "movies", "collection", "ratings", "watch_status", "notes", "sessions", "lists", "list_items", "search_cache", "actors"]) {
       expect(tables).toContain(t);
     }
   });

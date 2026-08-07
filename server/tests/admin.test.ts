@@ -103,4 +103,30 @@ describe("Admin-Backfill", () => {
     const row = db.prepare('SELECT imdb_bewertung FROM movies WHERE tmdb_id = 157336').get() as { imdb_bewertung: number | null };
     expect(row.imdb_bewertung).toBeNull();
   });
+
+  it("actors-Import: UPSERT und Validierung", async () => {
+    const ok = await request(app)
+      .post("/api/admin/actors")
+      .set("Cookie", adminCookie)
+      .send({
+        actors: [
+          { name: "Leonardo DiCaprio", bild: "https://image.tmdb.org/t/p/original/x.jpg" },
+          { name: "Gila von Weitershausen", bild: "/media/FilmeHD7/.actors/Gila_von_Weitershausen.jpg" },
+        ],
+      });
+    expect(ok.status).toBe(200);
+    expect(ok.body.imported).toBe(2);
+    const bad = await request(app)
+      .post("/api/admin/actors")
+      .set("Cookie", adminCookie)
+      .send({ actors: [{ name: "X", bild: "javascript:alert(1)" }] });
+    expect(bad.status).toBe(400);
+    const nochmal = await request(app)
+      .post("/api/admin/actors")
+      .set("Cookie", adminCookie)
+      .send({ actors: [{ name: "Leonardo DiCaprio", bild: "https://neu" }] });
+    expect(nochmal.status).toBe(200);
+    const row = db.prepare("SELECT bild FROM actors WHERE name = 'Leonardo DiCaprio'").get() as { bild: string };
+    expect(row.bild).toBe("https://neu"); // UPSERT
+  });
 });

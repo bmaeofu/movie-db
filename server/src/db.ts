@@ -74,6 +74,11 @@ export function initSchema(db: Database.Database): void {
       tmdb_json TEXT NOT NULL,
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS actors (
+      name TEXT PRIMARY KEY,
+      bild TEXT NOT NULL,
+      zuletzt_aktualisiert TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   ensureColumn(db, "movies", "land", "land TEXT NOT NULL DEFAULT '[]'");

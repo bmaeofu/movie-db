@@ -16,7 +16,7 @@ const tmdb = createTmdbClient({ apiKey });
 const omdb = process.env.OMDB_API_KEY ? createOmdbClient({ apiKey: process.env.OMDB_API_KEY }) : undefined;
 const clientDistDir = path.join(process.cwd(), "..", "client", "dist");
 
-const app = createApp(db, tmdb, { clientDistDir, omdb });
+const app = createApp(db, tmdb, { clientDistDir, omdb, mediaDir: process.env.MEDIA_DIR ?? "/media" });
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Filmdatenbank läuft auf http://localhost:${port}`);

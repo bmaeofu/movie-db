@@ -102,6 +102,15 @@ export default function CollectionPage() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        {schauspieler && (
+          <img
+            className="actor-photo"
+            src={api.actorImageUrl(schauspieler)}
+            alt={schauspieler}
+            title={schauspieler}
+            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+          />
+        )}
         <select value={jahr} onChange={(e) => setJahr(e.target.value)}>
           <option value="">Alle Jahre</option>
           {facets.jahre.map((y) => (

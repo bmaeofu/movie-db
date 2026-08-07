@@ -11,10 +11,13 @@ import { createSearchRouter } from "./routes/searchRoutes.js";
 import { createCollectionRouter } from "./routes/collectionRoutes.js";
 import { createMovieRouter } from "./routes/movieRoutes.js";
 import { createListRouter } from "./routes/listRoutes.js";
+import { createActorRouter } from "./routes/actorRoutes.js";
 
 export interface AppOptions {
   clientDistDir?: string;
   omdb?: OmdbClient;
+  /** Basis-Ordner der gemounteten Medien (Read-only); Standard '/media' */
+  mediaDir?: string;
 }
 
 export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppOptions = {}): Express {
@@ -29,6 +32,7 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use("/api/collection", createCollectionRouter(db, tmdb, options.omdb));
   app.use("/api/movies", createMovieRouter(db));
   app.use("/api/lists", createListRouter(db));
+  app.use("/api/actors", createActorRouter(db, options.mediaDir ?? "/media"));
 
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Unbekannter API-Endpunkt" });

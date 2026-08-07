@@ -100,6 +100,7 @@ export const api = {
     request<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>(
       "/api/collection/facets"
     ),
+  actorImageUrl: (name: string) => `/api/actors/${encodeURIComponent(name)}/image`,
   removeFromCollection: (tmdbId: number) => request<void>(`/api/collection/${tmdbId}`, { method: "DELETE" }),
   setRating: (tmdbId: number, sterne: number) =>
     request<void>(`/api/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),
