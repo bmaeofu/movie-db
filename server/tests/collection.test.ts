@@ -226,7 +226,7 @@ describe("Sammlung", () => {
   });
 
   it("filtert nach Schauspieler und liefert schauspieler-Facette", async () => {
-    db.prepare('UPDATE movies SET "cast" = '[{"name":"Leonardo DiCaprio","rolle":"Cobb"}]\' WHERE tmdb_id = 27205').run();
+    db.prepare(`UPDATE movies SET "cast" = '[{"name":"Leonardo DiCaprio","rolle":"Cobb"}]' WHERE tmdb_id = 27205`).run();
     const gefiltert = await request(app).get("/api/collection?schauspieler=DiCaprio").set("Cookie", annaCookie);
     expect(gefiltert.body.map((m: any) => m.tmdb_id)).toContain(27205);
     const facets = await request(app).get("/api/collection/facets").set("Cookie", annaCookie);
