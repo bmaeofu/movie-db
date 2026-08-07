@@ -96,7 +96,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  facets: () => request<{ laender: string[]; regisseure: string[]; jahre: number[] }>("/api/collection/facets"),
+  facets: () =>
+    request<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>(
+      "/api/collection/facets"
+    ),
   removeFromCollection: (tmdbId: number) => request<void>(`/api/collection/${tmdbId}`, { method: "DELETE" }),
   setRating: (tmdbId: number, sterne: number) =>
     request<void>(`/api/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),

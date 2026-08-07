@@ -11,6 +11,7 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const genre = typeof query.genre === "string" ? query.genre.trim() : "";
   const land = typeof query.land === "string" ? query.land.trim() : "";
   const regisseur = typeof query.regisseur === "string" ? query.regisseur.trim() : "";
+  const schauspieler = typeof query.schauspieler === "string" ? query.schauspieler.trim() : "";
   const jahrParam = typeof query.jahr === "string" ? query.jahr.trim() : "";
   const tmdbMin = Number(query.tmdb_min);
   const imdbMin = Number(query.imdb_min);
@@ -42,6 +43,10 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   if (regisseur) {
     where.push("m.regisseure LIKE @regisseur");
     params.regisseur = `%${regisseur}%`;
+  }
+  if (schauspieler) {
+    where.push('m."cast" LIKE @schauspieler');
+    params.schauspieler = `%${schauspieler}%`;
   }
   const jahr = Number(jahrParam);
   if (jahrParam !== "" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100) {
@@ -314,23 +319,27 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
   router.get(
     "/facets",
     asyncHandler(async (_req, res) => {
-      const rows = db.prepare("SELECT land, regisseure, jahr FROM movies").all() as {
+      const rows = db.prepare('SELECT land, regisseure, jahr, "cast" FROM movies').all() as {
         land: string;
         regisseure: string;
         jahr: number | null;
+        cast: string;
       }[];
       const laender = new Set<string>();
       const regisseure = new Set<string>();
       const jahre = new Set<number>();
+      const schauspieler = new Set<string>();
       for (const r of rows) {
         for (const l of JSON.parse(r.land) as string[]) laender.add(l);
         for (const d of JSON.parse(r.regisseure) as string[]) regisseure.add(d);
         if (r.jahr !== null) jahre.add(r.jahr);
+        for (const c of JSON.parse(r.cast) as { name: string }[]) schauspieler.add(c.name);
       }
       res.json({
         laender: [...laender].sort(),
         regisseure: [...regisseure].sort(),
         jahre: [...jahre].sort((a, b) => b - a),
+        schauspieler: [...schauspieler].sort(),
       });
     })
   );

@@ -225,6 +225,14 @@ describe("Sammlung", () => {
     expect(status.body).toEqual({ count: 0 }); // noch nichts gesehen
   });
 
+  it("filtert nach Schauspieler und liefert schauspieler-Facette", async () => {
+    db.prepare('UPDATE movies SET "cast" = '[{"name":"Leonardo DiCaprio","rolle":"Cobb"}]\' WHERE tmdb_id = 27205').run();
+    const gefiltert = await request(app).get("/api/collection?schauspieler=DiCaprio").set("Cookie", annaCookie);
+    expect(gefiltert.body.map((m: any) => m.tmdb_id)).toContain(27205);
+    const facets = await request(app).get("/api/collection/facets").set("Cookie", annaCookie);
+    expect(facets.body.schauspieler).toContain("Leonardo DiCaprio");
+  });
+
   it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });

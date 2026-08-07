@@ -11,16 +11,18 @@ export default function CollectionPage() {
   const [genre, setGenre] = useState("");
   const [land, setLand] = useState("");
   const [regisseur, setRegisseur] = useState("");
+  const [schauspieler, setSchauspieler] = useState("");
   const [jahr, setJahr] = useState("");
   const [tmdbWert, setTmdbWert] = useState("");
   const [imdbWert, setImdbWert] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
-  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[]; jahre: number[] }>({
+  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>({
     laender: [],
     regisseure: [],
     jahre: [],
+    schauspieler: [],
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [detail, setDetail] = useState<Movie | null>(null);
@@ -43,6 +45,7 @@ export default function CollectionPage() {
     if (genre) filters.genre = genre;
     if (land) filters.land = land;
     if (regisseur) filters.regisseur = regisseur;
+    if (schauspieler) filters.schauspieler = schauspieler;
     if (jahr) filters.jahr = jahr;
     if (tmdbWert === "<5") filters.tmdb_max = "5";
     else if (tmdbWert) filters.tmdb_min = tmdbWert;
@@ -54,7 +57,7 @@ export default function CollectionPage() {
     setMovies(fresh);
     setCount(c.count);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, jahr, tmdbWert, imdbWert, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, medientyp, status, sort]);
 
   useEffect(() => {
     void load();
@@ -91,6 +94,12 @@ export default function CollectionPage() {
           <option value="">Alle Regisseure</option>
           {facets.regisseure.map((r) => (
             <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+        <select value={schauspieler} onChange={(e) => setSchauspieler(e.target.value)}>
+          <option value="">Alle Schauspieler</option>
+          {facets.schauspieler.map((s) => (
+            <option key={s} value={s}>{s}</option>
           ))}
         </select>
         <select value={jahr} onChange={(e) => setJahr(e.target.value)}>
