@@ -38,7 +38,8 @@ describe("Actor-Bilder", () => {
     db.prepare("INSERT INTO actors (name, bild) VALUES ('Test Person', '/media/test.jpg')").run();
     const res = await request(spaApp).get("/api/actors/Test%20Person/image");
     expect(res.status).toBe(200);
-    expect(res.text).toBe("bildinhalt");
+    expect(res.headers["content-type"]).toContain("image/jpeg");
+    expect(res.body.toString("utf8")).toBe("bildinhalt");
   });
 
   it("404 für unbekannte Schauspieler und unbekannte Bildquelle", async () => {
