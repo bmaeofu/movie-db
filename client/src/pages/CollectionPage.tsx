@@ -74,9 +74,30 @@ export default function CollectionPage() {
 
   const genres = [...new Set(movies.flatMap((m) => m.genres))].sort();
 
+  function resetFilters() {
+    setQ("");
+    setText("");
+    setGenre("");
+    setLand("");
+    setRegisseur("");
+    setSchauspielerInput("");
+    setSchauspieler("");
+    setJahr("");
+    setTmdbWert("");
+    setImdbWert("");
+    setMedientyp("");
+    setStatus("");
+    setSort("zuletzt_hinzugefuegt");
+  }
+
   return (
     <main className="page">
-      <div className="filterbar">
+      <div
+        className="filterbar"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") resetFilters();
+        }}
+      >
         <input placeholder="Titel suchen…" value={q} onChange={(e) => setQ(e.target.value)} />
         <input placeholder="Alle Felder durchsuchen…" value={text} onChange={(e) => setText(e.target.value)} />
         <select value={genre} onChange={(e) => setGenre(e.target.value)}>
@@ -106,12 +127,6 @@ export default function CollectionPage() {
             setSchauspielerInput(v);
             if (facets.schauspieler.includes(v)) setSchauspieler(v);
             else setSchauspieler("");
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setSchauspielerInput("");
-              setSchauspieler("");
-            }
           }}
         />
         <datalist id="schauspieler-list">
