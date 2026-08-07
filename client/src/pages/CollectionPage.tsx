@@ -12,6 +12,7 @@ export default function CollectionPage() {
   const [land, setLand] = useState("");
   const [regisseur, setRegisseur] = useState("");
   const [schauspieler, setSchauspieler] = useState("");
+  const [schauspielerInput, setSchauspielerInput] = useState("");
   const [jahr, setJahr] = useState("");
   const [tmdbWert, setTmdbWert] = useState("");
   const [imdbWert, setImdbWert] = useState("");
@@ -96,13 +97,26 @@ export default function CollectionPage() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <select value={schauspieler} onChange={(e) => setSchauspieler(e.target.value)}>
-          <option value="">Alle Schauspieler</option>
-          {facets.schauspieler.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        {schauspieler && (
+        <input
+          list="schauspieler-list"
+          placeholder="Schauspieler suchen…"
+          value={schauspielerInput}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSchauspielerInput(v);
+            if (facets.schauspieler.includes(v)) setSchauspieler(v);
+            else setSchauspieler("");
+          }}
+        />
+        <datalist id="schauspieler-list">
+          {facets.schauspieler
+            .filter((s) => s.toLowerCase().includes(schauspielerInput.toLowerCase()))
+            .slice(0, 200)
+            .map((s) => (
+              <option key={s} value={s} />
+            ))}
+        </datalist>
+        {schauspieler && schauspieler === schauspielerInput && (
           <img
             className="actor-photo"
             src={api.actorImageUrl(schauspieler)}
