@@ -165,7 +165,7 @@ export default function CollectionPage() {
           <option value="tmdb_bewertung">Beste TMDb-Bewertung</option>
           <option value="imdb_bewertung">Beste IMDb-Bewertung</option>
         </select>
-        <button className="primary" onClick={() => setSearchOpen(true)}>+ Film suchen</button>
+        <button className="primary" onClick={() => setSearchOpen(true)}>+ Film hinzufügen</button>
       </div>
 
       <p className="stat">
@@ -173,7 +173,7 @@ export default function CollectionPage() {
       </p>
 
       {movies.length === 0 ? (
-        <p className="empty">Noch keine Filme. Klick auf „+ Film suchen“.</p>
+        <p className="empty">Noch keine Filme. Klick auf „+ Film hinzufügen“.</p>
       ) : (
         <div className="grid">
           {movies.map((m) => (

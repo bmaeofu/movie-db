@@ -27,9 +27,9 @@ test("Smoke: Einrichtung → Suche → Hinzufügen → Bewerten → Abmelden", a
   }
   await page.waitForURL("/");
 
-  await page.getByRole("button", { name: "+ Film suchen" }).click();
+  await page.getByRole("button", { name: "+ Film hinzufügen" }).click();
   await page.getByPlaceholder("Titel bei TMDB suchen…").fill("Inception");
-  // Abweichung vom Brief: exact: true – ohne matcht „+ Film suchen" (Substring)
+  // Abweichung vom Brief: exact: true – ohne matcht „+ Film hinzufügen" (Substring)
   // zusätzlich den Submit-Button → Strict-Mode-Verletzung.
   await page.getByRole("button", { name: "Suchen", exact: true }).click();
 
