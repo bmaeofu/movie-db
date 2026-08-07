@@ -27,10 +27,16 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       const rows = db
         .prepare(
           force
-            ? "SELECT tmdb_id, medientyp, land, imdb_bewertung FROM movies WHERE tmdb_id > 0"
-            : "SELECT tmdb_id, medientyp, land, imdb_bewertung FROM movies WHERE tmdb_id > 0 AND (land = '[]' OR imdb_bewertung IS NULL)"
+            ? "SELECT tmdb_id, medientyp, land, imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id > 0"
+            : "SELECT tmdb_id, medientyp, land, imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id > 0 AND (land = '[]' OR imdb_bewertung IS NULL)"
         )
-        .all() as { tmdb_id: number; medientyp: "film" | "serie"; land: string; imdb_bewertung: number | null }[];
+        .all() as {
+        tmdb_id: number;
+        medientyp: "film" | "serie";
+        land: string;
+        imdb_bewertung: number | null;
+        imdb_stimmen: number | null;
+      }[];
       const updated: number[] = [];
       const failed: { tmdb_id: number; error: string }[] = [];
       let omdbCalls = 0;
@@ -40,6 +46,9 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           const useOmdb = omdb !== undefined && omdbCalls < omdbLimit;
           const omdbData = useOmdb ? await omdb!.rating(m.imdb_id) : null;
           if (useOmdb) omdbCalls++;
+          // Bei erreichtem OMDb-Budget die vorhandenen IMDb-Werte erhalten (nicht überschreiben)
+          const imdb_bewertung = omdbData?.bewertung ?? row.imdb_bewertung;
+          const imdb_stimmen = omdbData?.stimmen ?? row.imdb_stimmen;
           updateEnriched.run(
             JSON.stringify(m.land),
             JSON.stringify(m.regisseure),
@@ -47,8 +56,8 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             JSON.stringify(m.cast),
             m.tmdb_bewertung,
             m.tmdb_stimmen,
-            omdbData?.bewertung ?? null,
-            omdbData?.stimmen ?? null,
+            imdb_bewertung,
+            imdb_stimmen,
             row.tmdb_id
           );
           updated.push(row.tmdb_id);

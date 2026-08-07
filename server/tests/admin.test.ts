@@ -79,13 +79,18 @@ describe("Admin-Backfill", () => {
     expect(second.body.updated).toBe(0); // idempotent
   });
 
-  it("omdb_limit begrenzt die OMDb-Aufrufe (imdb_bewertung bleibt null)", async () => {
+  it("omdb_limit begrenzt die OMDb-Aufrufe und erhält vorhandene IMDb-Werte", async () => {
     enriched = true;
+    db.prepare("UPDATE movies SET imdb_bewertung = 6.6, imdb_stimmen = 42 WHERE tmdb_id = 27205").run();
     const res = await request(app).post("/api/admin/backfill?omdb_limit=0").set("Cookie", adminCookie);
     expect(res.status).toBe(200);
     expect(res.body.updated).toBe(1); // TMDB-Daten werden trotzdem angereichert
-    const row = db.prepare('SELECT imdb_bewertung FROM movies WHERE tmdb_id = 27205').get() as { imdb_bewertung: number | null };
-    expect(row.imdb_bewertung).toBeNull(); // kein OMDb-Aufruf
+    const row = db.prepare('SELECT imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id = 27205').get() as {
+      imdb_bewertung: number | null;
+      imdb_stimmen: number | null;
+    };
+    expect(row.imdb_bewertung).toBe(6.6); // vorhandene Werte bleiben erhalten
+    expect(row.imdb_stimmen).toBe(42);
   });
 
   it("skip_omdb beim Hinzufügen lässt imdb_bewertung leer", async () => {

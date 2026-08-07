@@ -31,6 +31,7 @@ export interface Movie extends SearchResult {
   tmdb_stimmen: number | null;
   imdb_bewertung: number | null;
   imdb_stimmen: number | null;
+  imdb_id: string | null;
   source: string;
 }
 
