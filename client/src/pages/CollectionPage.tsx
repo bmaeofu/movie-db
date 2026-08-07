@@ -254,6 +254,7 @@ export default function CollectionPage() {
           }}
           onSelectRegisseur={(r) => {
             setRegisseur(r);
+            setRegisseurInput(r);
             setDetail(null);
           }}
         />
