@@ -107,6 +107,12 @@ export default function CollectionPage() {
             if (facets.schauspieler.includes(v)) setSchauspieler(v);
             else setSchauspieler("");
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setSchauspielerInput("");
+              setSchauspieler("");
+            }
+          }}
         />
         <datalist id="schauspieler-list">
           {facets.schauspieler
