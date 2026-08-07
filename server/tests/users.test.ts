@@ -127,6 +127,21 @@ describe("User-Verwaltung", () => {
     expect((await request(app).get("/api/auth/me").set("Cookie", benCookie)).body.is_admin).toBe(1);
   });
 
+  it("neuer Benutzer bekommt Status 'neu' für alle vorhandenen Filme", async () => {
+    await request(app).post("/api/collection").set("Cookie", adminCookie).send({ tmdb_id: 27205, medientyp: "film" });
+    const reg = await request(app)
+      .post("/api/auth/register")
+      .set("Cookie", adminCookie)
+      .send({ name: "Neuling", password: "neuling1" });
+    expect(reg.status).toBe(201);
+    const neuUserId = reg.body.id as number;
+    const rows = db
+      .prepare("SELECT tmdb_id, status FROM watch_status WHERE user_id = ?")
+      .all(neuUserId) as { tmdb_id: number; status: string }[];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.status).toBe("neu");
+  });
+
   it("Löschen: nicht sich selbst, nicht letzten Admin; Kaskaden + added_by SET NULL", async () => {
     const anna = db.prepare("SELECT id FROM users WHERE name = 'Anna'").get() as { id: number };
     const ben = db.prepare("SELECT id FROM users WHERE name = 'Ben'").get() as { id: number };

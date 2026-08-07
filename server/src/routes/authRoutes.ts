@@ -51,6 +51,8 @@ export function createAuthRouter(db: Database.Database): Router {
         .prepare("INSERT INTO users (name, password_hash, is_admin) VALUES (?, ?, ?)")
         .run(trimmed, hashPassword(password), isBootstrap ? 1 : 0);
       const userId = Number(info.lastInsertRowid);
+      // Neue Benutzer sehen alle vorhandenen Filme als 'neu' (bei Bootstrap: Sammlung leer → no-op)
+      db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT ?, tmdb_id, 'neu' FROM collection").run(userId);
       if (isBootstrap) {
         const token = createSession(db, userId);
         res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", maxAge: SESSION_MAX_AGE_MS });
