@@ -183,6 +183,15 @@ describe("Sammlung", () => {
     expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
   });
 
+  it("count liefert die Trefferzahl mit denselben Filtern", async () => {
+    const alle = await request(app).get("/api/collection/count").set("Cookie", annaCookie);
+    expect(alle.body).toEqual({ count: 3 });
+    const gefiltert = await request(app).get("/api/collection/count?genre=Action").set("Cookie", annaCookie);
+    expect(gefiltert.body).toEqual({ count: 1 });
+    const status = await request(app).get("/api/collection/count?status=gesehen").set("Cookie", annaCookie);
+    expect(status.body).toEqual({ count: 0 }); // noch nichts gesehen
+  });
+
   it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });

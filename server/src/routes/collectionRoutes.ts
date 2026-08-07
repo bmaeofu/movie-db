@@ -5,6 +5,66 @@ import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
 
+function buildFilter(query: Record<string, unknown>): { where: string[]; params: Record<string, unknown> } {
+  const q = typeof query.q === "string" ? query.q.trim() : "";
+  const text = typeof query.text === "string" ? query.text.trim() : "";
+  const genre = typeof query.genre === "string" ? query.genre.trim() : "";
+  const land = typeof query.land === "string" ? query.land.trim() : "";
+  const regisseur = typeof query.regisseur === "string" ? query.regisseur.trim() : "";
+  const jahrParam = typeof query.jahr === "string" ? query.jahr.trim() : "";
+  const tmdbMin = Number(query.tmdb_min);
+  const imdbMin = Number(query.imdb_min);
+  const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
+  const status = typeof query.status === "string" ? query.status : "";
+
+  const where: string[] = [];
+  const params: Record<string, unknown> = {};
+  if (q) {
+    where.push("m.titel LIKE @q");
+    params.q = `%${q}%`;
+  }
+  if (text) {
+    where.push(
+      '(m.titel LIKE @text OR m.regisseure LIKE @text OR m.autoren LIKE @text OR m."cast" LIKE @text OR m.land LIKE @text)'
+    );
+    params.text = `%${text}%`;
+  }
+  if (genre) {
+    where.push("m.genres LIKE @genre");
+    params.genre = `%${genre}%`;
+  }
+  if (land) {
+    where.push("m.land LIKE @land");
+    params.land = `%${land}%`;
+  }
+  if (regisseur) {
+    where.push("m.regisseure LIKE @regisseur");
+    params.regisseur = `%${regisseur}%`;
+  }
+  const jahr = Number(jahrParam);
+  if (jahrParam !== "" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100) {
+    where.push("m.jahr = @jahr");
+    params.jahr = jahr;
+  }
+  if (Number.isFinite(tmdbMin) && tmdbMin >= 0 && tmdbMin <= 10) {
+    where.push("m.tmdb_bewertung >= @tmdbMin");
+    params.tmdbMin = tmdbMin;
+  }
+  if (Number.isFinite(imdbMin) && imdbMin >= 0 && imdbMin <= 10) {
+    where.push("m.imdb_bewertung >= @imdbMin");
+    params.imdbMin = imdbMin;
+  }
+  if (medientyp === "film" || medientyp === "serie") {
+    where.push("m.medientyp = @medientyp");
+    params.medientyp = medientyp;
+  }
+  if (status) {
+    where.push("ws.status = @status");
+    params.status = status;
+  }
+  return { where, params };
+}
+
 export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db));
@@ -176,63 +236,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
     "/",
     asyncHandler(async (req, res) => {
       const userId = (req as AuthedRequest).user.id;
-      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-      const text = typeof req.query.text === "string" ? req.query.text.trim() : "";
-      const genre = typeof req.query.genre === "string" ? req.query.genre.trim() : "";
-      const land = typeof req.query.land === "string" ? req.query.land.trim() : "";
-      const regisseur = typeof req.query.regisseur === "string" ? req.query.regisseur.trim() : "";
-      const jahrParam = typeof req.query.jahr === "string" ? req.query.jahr.trim() : "";
-      const tmdbMin = Number(req.query.tmdb_min);
-      const imdbMin = Number(req.query.imdb_min);
-      const medientyp = typeof req.query.medientyp === "string" ? req.query.medientyp : "";
-      const status = typeof req.query.status === "string" ? req.query.status : "";
       const sort = typeof req.query.sort === "string" ? req.query.sort : "zuletzt_hinzugefuegt";
-
-      const where: string[] = [];
-      const params: Record<string, unknown> = {};
-      if (q) {
-        where.push("m.titel LIKE @q");
-        params.q = `%${q}%`;
-      }
-      if (text) {
-        where.push(
-          '(m.titel LIKE @text OR m.regisseure LIKE @text OR m.autoren LIKE @text OR m."cast" LIKE @text OR m.land LIKE @text)'
-        );
-        params.text = `%${text}%`;
-      }
-      if (genre) {
-        where.push("m.genres LIKE @genre");
-        params.genre = `%${genre}%`;
-      }
-      if (land) {
-        where.push("m.land LIKE @land");
-        params.land = `%${land}%`;
-      }
-      if (regisseur) {
-        where.push("m.regisseure LIKE @regisseur");
-        params.regisseur = `%${regisseur}%`;
-      }
-      const jahr = Number(jahrParam);
-      if (jahrParam !== "" && Number.isInteger(jahr) && jahr >= 1888 && jahr <= 2100) {
-        where.push("m.jahr = @jahr");
-        params.jahr = jahr;
-      }
-      if (Number.isFinite(tmdbMin) && tmdbMin >= 0 && tmdbMin <= 10) {
-        where.push("m.tmdb_bewertung >= @tmdbMin");
-        params.tmdbMin = tmdbMin;
-      }
-      if (Number.isFinite(imdbMin) && imdbMin >= 0 && imdbMin <= 10) {
-        where.push("m.imdb_bewertung >= @imdbMin");
-        params.imdbMin = imdbMin;
-      }
-      if (medientyp === "film" || medientyp === "serie") {
-        where.push("m.medientyp = @medientyp");
-        params.medientyp = medientyp;
-      }
-      if (status) {
-        where.push("ws.status = @status");
-        params.status = status;
-      }
+      const { where, params } = buildFilter(req.query);
 
       const orderBy: Record<string, string> = {
         titel: "m.titel COLLATE NOCASE ASC",
@@ -252,6 +257,24 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt
       );
       res.json(rows);
+    })
+  );
+
+  router.get(
+    "/count",
+    asyncHandler(async (req, res) => {
+      const userId = (req as AuthedRequest).user.id;
+      const { where, params } = buildFilter(req.query);
+      const row = db
+        .prepare(
+          `SELECT COUNT(DISTINCT m.tmdb_id) AS n
+           FROM collection c
+           JOIN movies m ON m.tmdb_id = c.tmdb_id
+           LEFT JOIN watch_status ws ON ws.tmdb_id = c.tmdb_id AND ws.user_id = @userId
+           ${where.length ? "WHERE " + where.join(" AND ") : ""}`
+        )
+        .get({ userId, ...params }) as { n: number };
+      res.json({ count: row.n });
     })
   );
 

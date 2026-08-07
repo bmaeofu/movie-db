@@ -24,6 +24,17 @@ export default function CollectionPage() {
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [detail, setDetail] = useState<Movie | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+
+  const SORT_LABELS: Record<string, string> = {
+    zuletzt_hinzugefuegt: "Zuletzt hinzugefügt",
+    titel: "Titel A–Z",
+    jahr: "Neueste zuerst",
+    bewertung: "Beste Bewertung",
+    tmdb_bewertung: "Beste TMDb-Bewertung",
+    imdb_bewertung: "Beste IMDb-Bewertung",
+  };
 
   const load = useCallback(async () => {
     const filters: Record<string, string> = { sort };
@@ -37,8 +48,9 @@ export default function CollectionPage() {
     if (imdbMin) filters.imdb_min = imdbMin;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
-    const fresh = await api.collection(filters);
+    const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
     setMovies(fresh);
+    setCount(c.count);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
   }, [q, text, genre, land, regisseur, jahr, tmdbMin, imdbMin, medientyp, status, sort]);
 
@@ -48,6 +60,10 @@ export default function CollectionPage() {
 
   useEffect(() => {
     api.facets().then(setFacets).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.count({}).then((c) => setTotal(c.count)).catch(() => {});
   }, []);
 
   const genres = [...new Set(movies.flatMap((m) => m.genres))].sort();
@@ -115,6 +131,10 @@ export default function CollectionPage() {
         </select>
         <button className="primary" onClick={() => setSearchOpen(true)}>+ Film suchen</button>
       </div>
+
+      <p className="stat">
+        {count ?? "–"} von {total ?? "–"} Filmen · Sortierung: {SORT_LABELS[sort] ?? sort}
+      </p>
 
       {movies.length === 0 ? (
         <p className="empty">Noch keine Filme. Klick auf „+ Film suchen“.</p>

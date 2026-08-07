@@ -75,6 +75,8 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   search: (q: string) => request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   collection: (filters: Record<string, string>) => request<Movie[]>("/api/collection?" + new URLSearchParams(filters).toString()),
+  count: (filters: Record<string, string>) =>
+    request<{ count: number }>("/api/collection/count?" + new URLSearchParams(filters).toString()),
   addToCollection: (tmdb_id: number, medientyp: string) =>
     request<{ message: string }>("/api/collection", { method: "POST", body: JSON.stringify({ tmdb_id, medientyp }) }),
   addCustomMovie: (payload: {
