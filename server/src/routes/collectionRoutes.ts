@@ -15,8 +15,9 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const jahrParam = typeof query.jahr === "string" ? query.jahr.trim() : "";
   const tmdbMin = Number(query.tmdb_min);
   const imdbMin = Number(query.imdb_min);
+  const ratingMin = Number(query.rating_min);
   const tmdbMax = Number(query.tmdb_max);
-  const imdbMax = Number(query.imdb_max);
+  const imdbMax = Number(query.imdb_max); 
   const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
   const status = typeof query.status === "string" ? query.status : "";
 
@@ -60,6 +61,10 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   if (Number.isFinite(imdbMin) && imdbMin >= 0 && imdbMin <= 10) {
     where.push("m.imdb_bewertung >= @imdbMin");
     params.imdbMin = imdbMin;
+  }
+  if (Number.isFinite(ratingMin) && ratingMin >= 1 && ratingMin <= 5) {
+    where.push("(SELECT AVG(rating.sterne) FROM ratings rating WHERE rating.tmdb_id = m.tmdb_id) >= @ratingMin");
+    params.ratingMin = ratingMin;
   }
   if (Number.isFinite(tmdbMax) && tmdbMax >= 0 && tmdbMax <= 10) {
     where.push("m.tmdb_bewertung < @tmdbMax");

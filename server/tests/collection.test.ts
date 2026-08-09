@@ -206,6 +206,17 @@ describe("Sammlung", () => {
     expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
   });
 
+  it("filtert nach durchschnittlicher Benutzerwertung", async () => {
+    await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
+    await request(app).put("/api/movies/27205/rating").set("Cookie", benCookie).send({ sterne: 3 });
+    await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 2 });
+
+    const minVier = await request(app).get("/api/collection?rating_min=4").set("Cookie", annaCookie);
+    expect(minVier.body.map((m: any) => m.tmdb_id)).toEqual([27205]);
+    const minZwei = await request(app).get("/api/collection?rating_min=2").set("Cookie", annaCookie);
+    expect(minZwei.body.map((m: any) => m.tmdb_id).sort()).toEqual([157336, 27205]);
+  });
+
   it("filtert unterhalb einer Bewertung (tmdb_max/imdb_max)", async () => {
     db.prepare("UPDATE movies SET tmdb_bewertung = 4.2, imdb_bewertung = 4.8 WHERE tmdb_id = 27205").run();
     db.prepare("UPDATE movies SET tmdb_bewertung = 6.4, imdb_bewertung = 6.1 WHERE tmdb_id = 157336").run();

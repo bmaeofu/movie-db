@@ -17,6 +17,7 @@ export default function CollectionPage() {
   const [jahr, setJahr] = useState("");
   const [tmdbWert, setTmdbWert] = useState("");
   const [imdbWert, setImdbWert] = useState("");
+  const [benutzerWert, setBenutzerWert] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
@@ -53,13 +54,14 @@ export default function CollectionPage() {
     else if (tmdbWert) filters.tmdb_min = tmdbWert;
     if (imdbWert === "<5") filters.imdb_max = "5";
     else if (imdbWert) filters.imdb_min = imdbWert;
+    if (benutzerWert) filters.rating_min = benutzerWert;
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
     const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
     setMovies(fresh);
     setCount(c.count);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, sort]);
 
   useEffect(() => {
     void load();
@@ -87,8 +89,8 @@ export default function CollectionPage() {
     setJahr("");
     setTmdbWert("");
     setImdbWert("");
+    setBenutzerWert("");
     setMedientyp("");
-    setStatus("");
     setSort("zuletzt_hinzugefuegt");
   }
 
@@ -102,8 +104,8 @@ export default function CollectionPage() {
     jahr !== "" ||
     tmdbWert !== "" ||
     imdbWert !== "" ||
+    benutzerWert !== "" ||
     medientyp !== "" ||
-    status !== "" ||
     sort !== "zuletzt_hinzugefuegt";
 
   return (
@@ -194,6 +196,12 @@ export default function CollectionPage() {
             <option key={v} value={String(v)}>IMDb ≥ {v.toFixed(1).replace(".0", "")}</option>
           ))}
           <option value="<5">IMDb &lt; 5</option>
+        </select>
+        <select value={benutzerWert} onChange={(e) => setBenutzerWert(e.target.value)}>
+          <option value="">Benutzerwertung egal</option>
+          {[5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1].map((v) => (
+            <option key={v} value={String(v)}>Benutzer ≥ {v.toFixed(1).replace(".0", "")}</option>
+          ))}
         </select>
         <select value={medientyp} onChange={(e) => setMedientyp(e.target.value)}>
           <option value="">Filme & Serien</option>
