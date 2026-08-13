@@ -80,6 +80,9 @@ export default function MovieDetailModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal movie-detail" onClick={(e) => e.stopPropagation()}>
         <h2>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h2>
+        <p className="genres">
+          Quelle: {movie.source === "kodi" ? "Kodi" : `Manuell hinzugefügt${movie.added_by_name ? ` von ${movie.added_by_name}` : ""}`}
+        </p>
         {movie.overview && <p className="overview">{movie.overview}</p>}
         {movie.genres.length > 0 && (
           <p className="genres">Genres: {movie.genres.map((g) => (
