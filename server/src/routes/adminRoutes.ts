@@ -101,6 +101,32 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     })
   );
 
+  router.post(
+    "/runtime-backfill-tmdb",
+    asyncHandler(async (_req, res) => {
+      const rows = db.prepare(
+        "SELECT tmdb_id, medientyp FROM movies WHERE tmdb_id > 0 AND laufzeit_minuten IS NULL"
+      ).all() as { tmdb_id: number; medientyp: "film" | "serie" }[];
+      const updated: number[] = [];
+      const failed: { tmdb_id: number; error: string }[] = [];
+      const updateRuntime = db.prepare(
+        "UPDATE movies SET laufzeit_minuten = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ? AND laufzeit_minuten IS NULL"
+      );
+      for (const row of rows) {
+        try {
+          const movie = await tmdb.details(row.tmdb_id, row.medientyp);
+          if (movie.laufzeit_minuten !== null) {
+            updateRuntime.run(movie.laufzeit_minuten, row.tmdb_id);
+            updated.push(row.tmdb_id);
+          }
+        } catch (err) {
+          failed.push({ tmdb_id: row.tmdb_id, error: err instanceof Error ? err.message : "unbekannt" });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+      res.json({ geprüft: rows.length, aktualisiert: updated.length, ohne_laufzeit: rows.length - updated.length, fehlgeschlagen: failed });
+    })
+  );
   /**
    * Übernimmt Schauspieler-Fotos (Name → Bildquelle) aus einer externen Quelle (Kodi art-Tabelle).
    * bild: entweder vollständige http(s)-URL oder lokaler Pfad relativ zum gemounteten Medien-Ordner (beginnt mit '/').
