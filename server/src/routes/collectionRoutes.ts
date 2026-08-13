@@ -18,6 +18,8 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const ratingMin = Number(query.rating_min);
   const tmdbMax = Number(query.tmdb_max);
   const imdbMax = Number(query.imdb_max); 
+  const runtimeMin = Number(query.runtime_min);
+  const runtimeMax = Number(query.runtime_max);
   const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
   const status = typeof query.status === "string" ? query.status : "";
 
@@ -73,6 +75,14 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   if (Number.isFinite(imdbMax) && imdbMax >= 0 && imdbMax <= 10) {
     where.push("m.imdb_bewertung < @imdbMax");
     params.imdbMax = imdbMax;
+  }
+  if (Number.isInteger(runtimeMin) && runtimeMin >= 0) {
+    where.push("m.laufzeit_minuten >= @runtimeMin");
+    params.runtimeMin = runtimeMin;
+  }
+  if (Number.isInteger(runtimeMax) && runtimeMax >= 0) {
+    where.push("m.laufzeit_minuten <= @runtimeMax");
+    params.runtimeMax = runtimeMax;
   }
   if (medientyp === "film" || medientyp === "serie") {
     where.push("m.medientyp = @medientyp");
@@ -284,6 +294,8 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
 
       const orderBy: Record<string, string> = {
         titel: "m.titel COLLATE NOCASE ASC",
+        laufzeit_aufsteigend: "m.laufzeit_minuten IS NULL, m.laufzeit_minuten ASC",
+        laufzeit_absteigend: "m.laufzeit_minuten IS NULL, m.laufzeit_minuten DESC",
         jahr: "m.jahr DESC",
         bewertung: "avg_rating DESC",
         tmdb_bewertung: "m.tmdb_bewertung DESC",

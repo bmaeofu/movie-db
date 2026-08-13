@@ -20,6 +20,7 @@ export default function CollectionPage() {
   const [benutzerWert, setBenutzerWert] = useState("");
   const [medientyp, setMedientyp] = useState("");
   const [status, setStatus] = useState("");
+  const [laufzeit, setLaufzeit] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
   const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>({
     laender: [],
@@ -39,6 +40,8 @@ export default function CollectionPage() {
     bewertung: "Beste Bewertung",
     tmdb_bewertung: "Beste TMDb-Bewertung",
     imdb_bewertung: "Beste IMDb-Bewertung",
+    laufzeit_aufsteigend: "Kürzeste Laufzeit",
+    laufzeit_absteigend: "Längste Laufzeit",
   };
 
   const load = useCallback(async () => {
@@ -55,13 +58,17 @@ export default function CollectionPage() {
     if (imdbWert === "<5") filters.imdb_max = "5";
     else if (imdbWert) filters.imdb_min = imdbWert;
     if (benutzerWert) filters.rating_min = benutzerWert;
+    if (laufzeit === "<90") filters.runtime_max = "90";
+    else if (laufzeit === "90-120") { filters.runtime_min = "90"; filters.runtime_max = "120"; }
+    else if (laufzeit === "120-150") { filters.runtime_min = "120"; filters.runtime_max = "150"; }
+    else if (laufzeit === ">150") filters.runtime_min = "150";
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
     const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
     setMovies(fresh);
     setCount(c.count);
     setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, sort]);
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort]);
 
   useEffect(() => {
     void load();
@@ -91,6 +98,7 @@ export default function CollectionPage() {
     setImdbWert("");
     setBenutzerWert("");
     setMedientyp("");
+    setLaufzeit("");
     setSort("zuletzt_hinzugefuegt");
   }
 
@@ -106,6 +114,7 @@ export default function CollectionPage() {
     imdbWert !== "" ||
     benutzerWert !== "" ||
     medientyp !== "" ||
+    laufzeit !== "" ||
     sort !== "zuletzt_hinzugefuegt";
 
   return (
@@ -215,6 +224,13 @@ export default function CollectionPage() {
           <option value="gesehen">Gesehen</option>
           <option value="kein_interesse">Kein Interesse</option>
         </select>
+        <select value={laufzeit} onChange={(e) => setLaufzeit(e.target.value)}>
+          <option value="">Laufzeit egal</option>
+          <option value="&lt;90">Unter 90 Min.</option>
+          <option value="90-120">90–120 Min.</option>
+          <option value="120-150">120–150 Min.</option>
+          <option value="&gt;150">Über 150 Min.</option>
+        </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="zuletzt_hinzugefuegt">Zuletzt hinzugefügt</option>
           <option value="titel">Titel A–Z</option>
@@ -222,6 +238,8 @@ export default function CollectionPage() {
           <option value="bewertung">Beste Bewertung</option>
           <option value="tmdb_bewertung">Beste TMDb-Bewertung</option>
           <option value="imdb_bewertung">Beste IMDb-Bewertung</option>
+          <option value="laufzeit_aufsteigend">Kürzeste Laufzeit</option>
+          <option value="laufzeit_absteigend">Längste Laufzeit</option>
         </select>
         <button className="primary" onClick={() => setSearchOpen(true)}>+ Film hinzufügen</button>
         <button onClick={resetFilters} disabled={!hasFilter}>Alle anzeigen</button>
