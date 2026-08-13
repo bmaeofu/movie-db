@@ -88,19 +88,18 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
 export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db));
-
   const upsertMovie = db.prepare(
     `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, source)
+                        land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source)
      VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
-             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @source)
+             @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @laufzeit_minuten, @source)
      ON CONFLICT(tmdb_id) DO UPDATE SET
        titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
        genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
        tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
        autoren = excluded.autoren, "cast" = excluded.cast, tmdb_bewertung = excluded.tmdb_bewertung,
        tmdb_stimmen = excluded.tmdb_stimmen, imdb_bewertung = excluded.imdb_bewertung,
-       imdb_stimmen = excluded.imdb_stimmen, zuletzt_aktualisiert = datetime('now')`
+       imdb_stimmen = excluded.imdb_stimmen, laufzeit_minuten = excluded.laufzeit_minuten, zuletzt_aktualisiert = datetime('now')`
   );
 
   router.post(
@@ -261,6 +260,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
         tmdb_stimmen: movie.tmdb_stimmen,
         imdb_bewertung: finalImdb,
         imdb_stimmen: finalImdbStimmen,
+        laufzeit_minuten: movie.laufzeit_minuten,
         source: (source as string) ?? "user",
       });
       if (!existing) {

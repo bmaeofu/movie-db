@@ -10,7 +10,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
 
   const updateEnriched = db.prepare(
     `UPDATE movies SET land = ?, regisseure = ?, autoren = ?, "cast" = ?, tmdb_bewertung = ?, tmdb_stimmen = ?,
-     imdb_bewertung = ?, imdb_stimmen = ?, zuletzt_aktualisiert = datetime('now')
+     imdb_bewertung = ?, imdb_stimmen = ?, laufzeit_minuten = ?, zuletzt_aktualisiert = datetime('now')
      WHERE tmdb_id = ?`
   );
 
@@ -58,6 +58,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             m.tmdb_stimmen,
             imdb_bewertung,
             imdb_stimmen,
+            m.laufzeit_minuten,
             row.tmdb_id
           );
           updated.push(row.tmdb_id);
@@ -67,6 +68,36 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         await new Promise((resolve) => setTimeout(resolve, 120));
       }
       res.json({ updated: updated.length, failed, offen: rows.length - updated.length });
+    })
+  );
+  router.post(
+    "/runtime-backfill",
+    asyncHandler(async (req, res) => {
+      const runtimes = (req.body ?? {}).runtimes;
+      if (!Array.isArray(runtimes) || runtimes.length > 20000) {
+        res.status(400).json({ error: "runtimes: Array mit maximal 20000 Einträgen erforderlich" });
+        return;
+      }
+      const valid = runtimes.filter(
+        (row: unknown): row is { tmdb_id: number; laufzeit_minuten: number } =>
+          row !== null &&
+          typeof row === "object" &&
+          typeof (row as { tmdb_id?: unknown }).tmdb_id === "number" &&
+          Number.isInteger((row as { tmdb_id: number }).tmdb_id) &&
+          (row as { tmdb_id: number }).tmdb_id > 0 &&
+          typeof (row as { laufzeit_minuten?: unknown }).laufzeit_minuten === "number" &&
+          Number.isInteger((row as { laufzeit_minuten: number }).laufzeit_minuten) &&
+          (row as { laufzeit_minuten: number }).laufzeit_minuten > 0
+      );
+      const updateRuntime = db.prepare(
+        "UPDATE movies SET laufzeit_minuten = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?"
+      );
+      let updated = 0;
+      const apply = db.transaction(() => {
+        for (const row of valid) updated += updateRuntime.run(row.laufzeit_minuten, row.tmdb_id).changes;
+      });
+      apply();
+      res.json({ erhalten: runtimes.length, gültig: valid.length, aktualisiert: updated });
     })
   );
 

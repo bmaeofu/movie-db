@@ -90,6 +90,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "imdb_bewertung", "imdb_bewertung REAL");
   ensureColumn(db, "movies", "imdb_stimmen", "imdb_stimmen INTEGER");
   ensureColumn(db, "movies", "source", "source TEXT NOT NULL DEFAULT 'user'");
+  ensureColumn(db, "movies", "laufzeit_minuten", "laufzeit_minuten INTEGER");
 
   // Migration: watch_status-CHECK um 'neu' erweitern (Bestands-DBs; SQLite kann CHECKs nicht per ALTER ändern)
   const ws = db

@@ -83,6 +83,7 @@ export default function MovieDetailModal({
         <p className="genres">
           Quelle: {movie.source === "kodi" ? "Kodi" : `Manuell hinzugefügt${movie.added_by_name ? ` von ${movie.added_by_name}` : ""}`}
         </p>
+        {movie.laufzeit_minuten !== null && <p className="genres">Laufzeit: {movie.laufzeit_minuten} Min.</p>}
         {movie.overview && <p className="overview">{movie.overview}</p>}
         {movie.genres.length > 0 && (
           <p className="genres">Genres: {movie.genres.map((g) => (

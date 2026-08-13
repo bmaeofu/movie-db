@@ -32,6 +32,7 @@ export interface Movie extends SearchResult {
   imdb_bewertung: number | null;
   imdb_stimmen: number | null;
   imdb_id: string | null;
+  laufzeit_minuten: number | null;
   source: string;
 }
 

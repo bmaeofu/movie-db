@@ -13,6 +13,7 @@ export interface TmdbMovie {
   imdb_id: string | null;
   tmdb_bewertung: number | null;
   tmdb_stimmen: number;
+  laufzeit_minuten: number | null;
 }
 
 export interface TmdbClient {
@@ -112,6 +113,7 @@ export function createTmdbClient(options: {
       imdb_id: raw.imdb_id ?? null,
       tmdb_bewertung: typeof raw.vote_average === "number" ? Math.round(raw.vote_average * 10) / 10 : null,
       tmdb_stimmen: typeof raw.vote_count === "number" ? raw.vote_count : 0,
+      laufzeit_minuten: null,
     };
   }
 
@@ -129,6 +131,8 @@ export function createTmdbClient(options: {
       const genres = await genreMap(medientyp);
       const genreIds = ((raw.genres ?? []) as { id: number }[]).map((g) => g.id);
       const movie = mapResult({ ...raw, genre_ids: genreIds }, medientyp, genres);
+      const runtime = medientyp === "film" ? raw.runtime : raw.episode_run_time?.[0];
+      movie.laufzeit_minuten = typeof runtime === "number" && Number.isInteger(runtime) && runtime > 0 ? runtime : null;
       const credits = (raw.credits ?? {}) as { crew?: any[]; cast?: any[] };
       const cn = await countryNames();
       movie.land = ((raw.production_countries ?? []) as { iso_3166_1: string; name: string }[])
