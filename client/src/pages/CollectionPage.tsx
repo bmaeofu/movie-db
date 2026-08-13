@@ -58,7 +58,10 @@ export default function CollectionPage() {
     if (imdbWert === "<5") filters.imdb_max = "5";
     else if (imdbWert) filters.imdb_min = imdbWert;
     if (benutzerWert) filters.rating_min = benutzerWert;
-    if (laufzeit === "<90") filters.runtime_max = "90";
+    if (laufzeit === "<15") filters.runtime_max = "15";
+    else if (laufzeit === "15-30") { filters.runtime_min = "15"; filters.runtime_max = "30"; }
+    else if (laufzeit === "30-60") { filters.runtime_min = "30"; filters.runtime_max = "60"; }
+    else if (laufzeit === "60-90") { filters.runtime_min = "60"; filters.runtime_max = "90"; }
     else if (laufzeit === "90-120") { filters.runtime_min = "90"; filters.runtime_max = "120"; }
     else if (laufzeit === "120-150") { filters.runtime_min = "120"; filters.runtime_max = "150"; }
     else if (laufzeit === ">150") filters.runtime_min = "150";
@@ -226,7 +229,10 @@ export default function CollectionPage() {
         </select>
         <select value={laufzeit} onChange={(e) => setLaufzeit(e.target.value)}>
           <option value="">Laufzeit egal</option>
-          <option value="&lt;90">Unter 90 Min.</option>
+          <option value="&lt;15">Unter 15 Min.</option>
+          <option value="15-30">15–30 Min.</option>
+          <option value="30-60">30–60 Min.</option>
+          <option value="60-90">60–90 Min.</option>
           <option value="90-120">90–120 Min.</option>
           <option value="120-150">120–150 Min.</option>
           <option value="&gt;150">Über 150 Min.</option>
