@@ -113,10 +113,11 @@ export default function CollectionPage() {
     setSort("zuletzt_hinzugefuegt");
   }
 
-  function handleAdded(tmdbId: number) {
+  function handleAdded(tmdbId: number, titel: string) {
     setSearchOpen(false);
     setPendingOpen(tmdbId);
-    setQ("");
+    // Suche auf den hinzugefügten Film setzen, damit er im Grid sichtbar ist
+    setQ(titel);
     setText("");
     setGenre("");
     setLand("");
@@ -294,7 +295,7 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={(id) => handleAdded(id)} />}
+      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={(id, titel) => handleAdded(id, titel)} />}
       {detail && (
         <MovieDetailModal
           movie={detail}

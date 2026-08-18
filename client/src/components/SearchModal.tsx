@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type SearchResult } from "../api";
 
-export default function SearchModal({ onClose, onAdded }: { onClose: () => void; onAdded: (tmdbId: number) => void }) {
+export default function SearchModal({ onClose, onAdded }: { onClose: () => void; onAdded: (tmdbId: number, titel: string) => void }) {
   const [mode, setMode] = useState<"suche" | "manuell">("suche");
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -43,7 +43,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
     try {
       const res = await api.addToCollection(r.tmdb_id, r.medientyp);
       setAddMsg({ text: res.message, isError: false });
-      onAdded(r.tmdb_id);
+      onAdded(r.tmdb_id, r.titel);
     } catch (err) {
       setAddMsg({ text: err instanceof Error ? err.message : "Hinzufügen fehlgeschlagen", isError: true });
     }
@@ -81,7 +81,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
       setAutoren("");
       setCast("");
       setOverview("");
-      onAdded(res.tmdb_id);
+      onAdded(res.tmdb_id, titel.trim());
     } catch (err) {
       setManualMsg(err instanceof Error ? err.message : "Fehler");
       setManualErr(true);
