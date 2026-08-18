@@ -6,6 +6,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState("");
+  const [addMsg, setAddMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Manuelle Eingabe
@@ -24,6 +25,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setAddMsg(null);
     if (!q.trim()) return;
     setBusy(true);
     try {
@@ -37,11 +39,13 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
 
   async function add(r: SearchResult) {
     setError("");
+    setAddMsg(null);
     try {
-      await api.addToCollection(r.tmdb_id, r.medientyp);
+      const res = await api.addToCollection(r.tmdb_id, r.medientyp);
+      setAddMsg({ text: res.message, isError: false });
       onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Hinzufügen fehlgeschlagen");
+      setAddMsg({ text: err instanceof Error ? err.message : "Hinzufügen fehlgeschlagen", isError: true });
     }
   }
 
@@ -104,6 +108,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
               <button type="submit" disabled={busy}>{busy ? "Suche…" : "Suchen"}</button>
             </form>
             {error && <p className="error">{error}</p>}
+            {addMsg && <p className={addMsg.isError ? "error" : "ok"}>{addMsg.text}</p>}
             <ul className="search-results">
               {results.map((r) => (
                 <li key={`${r.medientyp}-${r.tmdb_id}`}>
