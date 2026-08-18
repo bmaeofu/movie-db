@@ -8,6 +8,17 @@ const STATUS_OPTIONS: Array<["neu" | "schauen" | "gesehen" | "kein_interesse", s
   ["kein_interesse", "Kein Interesse"],
 ];
 
+function formatAddedAt(value: string): string {
+  // SQLite-Datumsstring "YYYY-MM-DD HH:MM:SS" → "TT.MM.JJJJ, HH:MM" (Ortszeit)
+  const d = new Date(value.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return value;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}.${mm}.${d.getFullYear()}, ${hh}:${min}`;
+}
+
 export default function MovieDetailModal({
   movie,
   onClose,
@@ -81,7 +92,7 @@ export default function MovieDetailModal({
       <div className="modal movie-detail" onClick={(e) => e.stopPropagation()}>
         <h2>{movie.titel} {movie.jahr ? `(${movie.jahr})` : ""}</h2>
         <p className="genres">
-          Quelle: {movie.source === "kodi" ? "Kodi" : `Manuell hinzugefügt${movie.added_by_name ? ` von ${movie.added_by_name}` : ""}`}
+          Quelle: {movie.source === "kodi" ? "Kodi" : `Manuell hinzugefügt${movie.added_by_name ? ` von ${movie.added_by_name}` : ""}`}{movie.added_at ? ` am ${formatAddedAt(movie.added_at)}` : ""}
         </p>
         {movie.laufzeit_minuten !== null && <p className="genres">Laufzeit: {movie.laufzeit_minuten} Min.</p>}
         {movie.overview && <p className="overview">{movie.overview}</p>}
