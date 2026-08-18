@@ -227,6 +227,12 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       const forceRatings = req.query.force_ratings === "1";
       const existing = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?").get(tmdb_id);
       if (existing && !forceRatings) {
+        // Manuelles erneutes Hinzufügen: Film nach oben setzen (Sortierung "zuletzt hinzugefügt").
+        // Kodi-Re-Imports (source='kodi') lassen added_at unverändert.
+        const incomingSource = (source as string | undefined) ?? "user";
+        if (incomingSource !== "kodi") {
+          db.prepare("UPDATE collection SET added_at = datetime('now') WHERE tmdb_id = ?").run(tmdb_id);
+        }
         res.status(200).json({ message: "Bereits in der Sammlung" });
         return;
       }
