@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type SearchResult } from "../api";
 
-export default function SearchModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+export default function SearchModal({ onClose, onAdded }: { onClose: () => void; onAdded: (tmdbId: number) => void }) {
   const [mode, setMode] = useState<"suche" | "manuell">("suche");
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -43,7 +43,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
     try {
       const res = await api.addToCollection(r.tmdb_id, r.medientyp);
       setAddMsg({ text: res.message, isError: false });
-      onAdded();
+      onAdded(r.tmdb_id);
     } catch (err) {
       setAddMsg({ text: err instanceof Error ? err.message : "Hinzufügen fehlgeschlagen", isError: true });
     }
@@ -58,7 +58,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
       if (j !== null && (!Number.isInteger(j) || j < 1888 || j > 2100)) {
         throw new Error("Jahr muss eine gültige Jahreszahl sein");
       }
-      await api.addCustomMovie({
+      const res = await api.addCustomMovie({
         titel: titel.trim(),
         jahr: j,
         medientyp,
@@ -81,7 +81,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
       setAutoren("");
       setCast("");
       setOverview("");
-      onAdded();
+      onAdded(res.tmdb_id);
     } catch (err) {
       setManualMsg(err instanceof Error ? err.message : "Fehler");
       setManualErr(true);

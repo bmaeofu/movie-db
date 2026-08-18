@@ -29,6 +29,7 @@ export default function CollectionPage() {
     schauspieler: [],
   });
   const [searchOpen, setSearchOpen] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState<number | null>(null);
   const [detail, setDetail] = useState<Movie | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
@@ -70,8 +71,14 @@ export default function CollectionPage() {
     const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
     setMovies(fresh);
     setCount(c.count);
-    setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort]);
+    if (pendingOpen !== null) {
+      const m = fresh.find((x) => x.tmdb_id === pendingOpen);
+      if (m) setDetail(m);
+      setPendingOpen(null);
+    } else {
+      setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
+    }
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort, pendingOpen]);
 
   useEffect(() => {
     void load();
@@ -101,6 +108,28 @@ export default function CollectionPage() {
     setImdbWert("");
     setBenutzerWert("");
     setMedientyp("");
+    setStatus("");
+    setLaufzeit("");
+    setSort("zuletzt_hinzugefuegt");
+  }
+
+  function handleAdded(tmdbId: number) {
+    setSearchOpen(false);
+    setPendingOpen(tmdbId);
+    setQ("");
+    setText("");
+    setGenre("");
+    setLand("");
+    setRegisseur("");
+    setRegisseurInput("");
+    setSchauspielerInput("");
+    setSchauspieler("");
+    setJahr("");
+    setTmdbWert("");
+    setImdbWert("");
+    setBenutzerWert("");
+    setMedientyp("");
+    setStatus("");
     setLaufzeit("");
     setSort("zuletzt_hinzugefuegt");
   }
@@ -265,7 +294,7 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={() => void load()} />}
+      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={(id) => handleAdded(id)} />}
       {detail && (
         <MovieDetailModal
           movie={detail}
