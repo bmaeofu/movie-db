@@ -15,6 +15,10 @@ APP="http://192.168.178.75:11000"
 USER="OMP"
 PASS="ohmypi"
 
+# Log-Datei (persistenter Datenträger der App)
+LOG_DIR="/mnt/user/appdata/movie-db/logs"
+LOG_FILE="$LOG_DIR/kodi-sync.log"
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 COOKIE="$TMP/cookie.txt"
@@ -37,8 +41,14 @@ fi
 
 # --- 2) Serverseitigen Full-Sync auslösen ---
 echo "Starte Kodi-Full-Sync ..."
-curl -s -b "$COOKIE" \
+RESP="$(curl -s -b "$COOKIE" \
     -X POST "$APP/api/admin/kodi-full-sync" \
     -H "Content-Type: application/json" \
-    -d "{}"
+    -d "{}")"
+echo "$RESP"
+
+# --- 3) Ergebnis loggen ---
+mkdir -p "$LOG_DIR"
+echo "$(date '+%F %T') $RESP" >> "$LOG_FILE"
 echo
+echo "Log: $LOG_FILE"

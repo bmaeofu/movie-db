@@ -20,6 +20,10 @@ PASS="ohmypi"
 # über OMDb nachgezogen werden. Empfehlung: 900.
 OMDB_LIMIT=900
 
+# Log-Datei (persistenter Datenträger der App)
+LOG_DIR="/mnt/user/appdata/movie-db/logs"
+LOG_FILE="$LOG_DIR/kodi-enrich.log"
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 COOKIE="$TMP/cookie.txt"
@@ -42,8 +46,14 @@ fi
 
 # --- 2) Ergänzung auslösen ---
 echo "Starte Ergänzung (OMDb-Limit $OMDB_LIMIT) ..."
-curl -s -b "$COOKIE" \
+RESP="$(curl -s -b "$COOKIE" \
     -X POST "$APP/api/admin/enrich?omdb_limit=$OMDB_LIMIT" \
     -H "Content-Type: application/json" \
-    -d "{}"
+    -d "{}")"
+echo "$RESP"
+
+# --- 3) Ergebnis loggen ---
+mkdir -p "$LOG_DIR"
+echo "$(date '+%F %T') $RESP" >> "$LOG_FILE"
 echo
+echo "Log: $LOG_FILE"
