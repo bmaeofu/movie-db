@@ -11,3 +11,8 @@ playwright-report/
 
 # Agent-Scratch (Ledger, Briefs, Review-Pakete)
 .superpowers/
+
+# Korrektur-Listen (personenbezogene Medienpfade)
+movies_with_corrected_tmdb_id.txt
+unclear_tmdb_cases.txt
+no_land_films.txt
