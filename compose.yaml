@@ -3,7 +3,7 @@ services:
     build: .
     container_name: movie-db
     ports:
-      - "8080:3000"
+      - "11000:3000"
     environment:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - OMDB_API_KEY=${OMDB_API_KEY}
