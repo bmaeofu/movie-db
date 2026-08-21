@@ -68,7 +68,8 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
       SELECT
         u.value AS tmdb_id,
         m.c00 AS titel,
-        NULLIF(TRIM(m.c03), '') AS jahr,
+        CASE WHEN m.premiered IS NOT NULL AND m.premiered REGEXP '^[0-9]{4}'
+             THEN SUBSTRING(m.premiered, 1, 4) ELSE NULL END AS jahr,
         ROUND(m.c11 / 60) AS laufzeit,
         NULLIF(TRIM(m.c01), '') AS overview,
         NULLIF(TRIM(m.c14), '') AS genres,
