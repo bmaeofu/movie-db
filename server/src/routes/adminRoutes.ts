@@ -447,5 +447,93 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     })
   );
 
+  /**
+   * Korrigiert falsche TMDb-IDs (Reassignment inkl. FK-Tabellen).
+   * body: { fixes: [{ alt: number, neu: number }] }
+   * Ist `neu` bereits vorhanden, werden die Daten des falschen Eintrags zusammengeführt.
+   */
+  router.post(
+    "/fix-tmdb-ids",
+    asyncHandler(async (req, res) => {
+      const fixes = (req.body ?? {}).fixes;
+      if (!Array.isArray(fixes) || fixes.length > 500) {
+        res.status(400).json({ error: "fixes: Array mit max. 500 {alt, neu}-Einträgen erforderlich" });
+        return;
+      }
+      const valid = fixes.filter(
+        (f): f is { alt: number; neu: number } =>
+          f !== null &&
+          typeof f === "object" &&
+          typeof (f as { alt?: unknown }).alt === "number" &&
+          Number.isInteger((f as { alt: number }).alt) &&
+          typeof (f as { neu?: unknown }).neu === "number" &&
+          Number.isInteger((f as { neu: number }).neu) &&
+          (f as { alt: number }).alt > 0 &&
+          (f as { neu: number }).neu > 0 &&
+          (f as { alt: number }).alt !== (f as { neu: number }).neu
+      );
+
+      const copyMovie = db.prepare(
+        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                            land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert)
+         SELECT @neu, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert
+         FROM movies WHERE tmdb_id = @alt`
+      );
+      const exists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?");
+      const existsCol = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
+      const mvRatings = db.prepare(
+        "INSERT OR IGNORE INTO ratings (user_id, tmdb_id, sterne, updated_at) SELECT user_id, ?, sterne, updated_at FROM ratings WHERE tmdb_id = ?"
+      );
+      const delRatings = db.prepare("DELETE FROM ratings WHERE tmdb_id = ?");
+      const mvStatus = db.prepare(
+        "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT user_id, ?, status FROM watch_status WHERE tmdb_id = ?"
+      );
+      const delStatus = db.prepare("DELETE FROM watch_status WHERE tmdb_id = ?");
+      const mvNotes = db.prepare(
+        "INSERT OR IGNORE INTO notes (user_id, tmdb_id, text, updated_at) SELECT user_id, ?, text, updated_at FROM notes WHERE tmdb_id = ?"
+      );
+      const delNotes = db.prepare("DELETE FROM notes WHERE tmdb_id = ?");
+      const mvList = db.prepare(
+        "INSERT OR IGNORE INTO list_items (list_id, tmdb_id) SELECT list_id, ? FROM list_items WHERE tmdb_id = ?"
+      );
+      const delList = db.prepare("DELETE FROM list_items WHERE tmdb_id = ?");
+      const mvCol = db.prepare("UPDATE collection SET tmdb_id = ? WHERE tmdb_id = ?");
+      const delCol = db.prepare("DELETE FROM collection WHERE tmdb_id = ?");
+      const delMovie = db.prepare("DELETE FROM movies WHERE tmdb_id = ?");
+
+      const results: { alt: number; neu: number; status: string; merge?: boolean }[] = [];
+      const apply = db.transaction(() => {
+        for (const f of valid) {
+          if (!exists.get(f.alt)) {
+            results.push({ alt: f.alt, neu: f.neu, status: "alt_nicht_gefunden" });
+            continue;
+          }
+          const merge = Boolean(exists.get(f.neu));
+          if (!merge) copyMovie.run({ neu: f.neu, alt: f.alt });
+
+          mvRatings.run(f.neu, f.alt);
+          delRatings.run(f.alt);
+          mvStatus.run(f.neu, f.alt);
+          delStatus.run(f.alt);
+          mvNotes.run(f.neu, f.alt);
+          delNotes.run(f.alt);
+          mvList.run(f.neu, f.alt);
+          delList.run(f.alt);
+
+          if (existsCol.get(f.neu)) {
+            delCol.run(f.alt);
+          } else {
+            mvCol.run(f.neu, f.alt);
+          }
+          delMovie.run(f.alt);
+          results.push({ alt: f.alt, neu: f.neu, status: "ok", merge });
+        }
+      });
+      apply();
+      res.json({ fixes: results });
+    })
+  );
+
   return router;
 }
