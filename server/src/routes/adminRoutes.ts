@@ -535,5 +535,42 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     })
   );
 
+  /**
+   * Setzt das Produktionsland (land) für Filme aus externen Metadaten (z. B. .txt/.log).
+   * body: { land: [{ tmdb_id: number, land: string[] }] }
+   */
+  router.post(
+    "/set-land",
+    asyncHandler(async (req, res) => {
+      const items = (req.body ?? {}).land;
+      if (!Array.isArray(items) || items.length > 2000) {
+        res.status(400).json({ error: "land: Array mit max. 2000 Einträgen erforderlich" });
+        return;
+      }
+      const valid = items.filter(
+        (it): it is { tmdb_id: number; land: string[] } =>
+          it !== null &&
+          typeof it === "object" &&
+          typeof (it as { tmdb_id?: unknown }).tmdb_id === "number" &&
+          Number.isInteger((it as { tmdb_id: number }).tmdb_id) &&
+          (it as { tmdb_id: number }).tmdb_id > 0 &&
+          Array.isArray((it as { land?: unknown }).land) &&
+          (it as { land: unknown[] }).land.every((x) => typeof x === "string" && x.trim().length > 0)
+      );
+      const update = db.prepare(
+        "UPDATE movies SET land = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?"
+      );
+      let updated = 0;
+      const apply = db.transaction(() => {
+        for (const it of valid) {
+          const changes = update.run(JSON.stringify(it.land.map((l) => l.trim())), it.tmdb_id).changes;
+          if (changes > 0) updated++;
+        }
+      });
+      apply();
+      res.json({ erhalten: items.length, gültig: valid.length, aktualisiert: updated });
+    })
+  );
+
   return router;
 }
