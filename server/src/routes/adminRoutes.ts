@@ -380,7 +380,14 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       let enriched = 0;
       let omdbCalls = 0;
       const failed: { tmdb_id: number; error: string }[] = [];
+
+      // Fortschritt streamen (NDJSON), damit das User-Script Live-Ausgabe zeigt
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.write(JSON.stringify({ status: "start", gesamt: rows.length }) + "\n");
+
+      let i = 0;
       for (const row of rows) {
+        i++;
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
 
@@ -428,8 +435,14 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         }
         // node:20 kennt Promise.withResolvers nicht → klassische Form verwenden
         await new Promise((resolve) => setTimeout(resolve, 120));
+
+        if (i % 50 === 0) {
+          res.write(JSON.stringify({ status: "progress", verarbeitet: i, gesamt: rows.length, ergänzt: enriched }) + "\n");
+        }
       }
-      res.json({ geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls });
+      res.end(
+        JSON.stringify({ status: "done", geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls }) + "\n"
+      );
     })
   );
 

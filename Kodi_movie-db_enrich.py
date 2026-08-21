@@ -44,16 +44,14 @@ if [ "$HTTP_CODE" != "200" ]; then
     exit 1
 fi
 
-# --- 2) Ergänzung auslösen ---
+# --- 2) Ergänzung auslösen (Streaming-Fortschritt) ---
 echo "Starte Ergänzung (OMDb-Limit $OMDB_LIMIT) ..."
-RESP="$(curl -s -b "$COOKIE" \
+echo "=== $APP/api/admin/enrich @ $(date '+%F %T') ===" >> "$LOG_FILE"
+mkdir -p "$LOG_DIR"
+curl -N -s -b "$COOKIE" \
     -X POST "$APP/api/admin/enrich?omdb_limit=$OMDB_LIMIT" \
     -H "Content-Type: application/json" \
-    -d "{}")"
-echo "$RESP"
-
-# --- 3) Ergebnis loggen ---
-mkdir -p "$LOG_DIR"
-echo "$(date '+%F %T') $RESP" >> "$LOG_FILE"
+    -d "{}" \
+    | tee -a "$LOG_FILE"
 echo
 echo "Log: $LOG_FILE"
