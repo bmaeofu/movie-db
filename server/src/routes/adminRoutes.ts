@@ -334,5 +334,104 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     })
   );
 
+  /**
+   * Ergänzt fehlende Felder aus TMDB/OMDb (ohne vorhandene Kodi-Werte zu überschreiben).
+   * ?omdb_limit=N begrenzt OMDb-Aufrufe/Tag.
+   */
+  router.post(
+    "/enrich",
+    asyncHandler(async (req, res) => {
+      const omdbLimitRaw = Number(req.query.omdb_limit);
+      const omdbLimit = Number.isFinite(omdbLimitRaw) ? omdbLimitRaw : Infinity;
+      const rows = db
+        .prepare(
+          `SELECT tmdb_id, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
+                  tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten
+           FROM movies
+           WHERE tmdb_id > 0
+             AND (jahr IS NULL OR poster_url IS NULL OR overview IS NULL
+                  OR land = '[]' OR regisseure = '[]' OR autoren = '[]' OR "cast" = '[]'
+                  OR imdb_bewertung IS NULL)`
+        )
+        .all() as {
+        tmdb_id: number;
+        medientyp: "film" | "serie";
+        jahr: number | null;
+        poster_url: string | null;
+        overview: string | null;
+        land: string;
+        regisseure: string;
+        autoren: string;
+        cast: string;
+        tmdb_bewertung: number | null;
+        tmdb_stimmen: number | null;
+        imdb_bewertung: number | null;
+        imdb_stimmen: number | null;
+        laufzeit_minuten: number | null;
+      }[];
+
+      const update = db.prepare(
+        `UPDATE movies SET jahr = ?, poster_url = ?, overview = ?, land = ?, regisseure = ?, autoren = ?, "cast" = ?,
+                          tmdb_bewertung = ?, tmdb_stimmen = ?, imdb_bewertung = ?, imdb_stimmen = ?, laufzeit_minuten = ?,
+                          zuletzt_aktualisiert = datetime('now')
+         WHERE tmdb_id = ?`
+      );
+
+      let enriched = 0;
+      let omdbCalls = 0;
+      const failed: { tmdb_id: number; error: string }[] = [];
+      for (const row of rows) {
+        try {
+          const m = await tmdb.details(row.tmdb_id, row.medientyp);
+
+          // Nur fehlende Werte füllen; vorhandene Kodi-Werte bleiben erhalten
+          const jahr = row.jahr ?? m.jahr;
+          const poster_url = row.poster_url ?? m.poster_url;
+          const overview = row.overview ?? m.overview;
+          const land = row.land === "[]" ? JSON.stringify(m.land) : row.land;
+          const regisseure = row.regisseure === "[]" ? JSON.stringify(m.regisseure) : row.regisseure;
+          const autoren = row.autoren === "[]" ? JSON.stringify(m.autoren) : row.autoren;
+          const cast = row.cast === "[]" ? JSON.stringify(m.cast) : row.cast;
+          const tmdb_bewertung = row.tmdb_bewertung ?? m.tmdb_bewertung;
+          const tmdb_stimmen = row.tmdb_stimmen ?? m.tmdb_stimmen;
+          const laufzeit_minuten = row.laufzeit_minuten ?? m.laufzeit_minuten;
+
+          let imdb_bewertung = row.imdb_bewertung;
+          let imdb_stimmen = row.imdb_stimmen;
+          if (imdb_bewertung === null && omdb !== undefined && omdbCalls < omdbLimit) {
+            const omdbData = await omdb.rating(m.imdb_id);
+            omdbCalls++;
+            if (omdbData) {
+              imdb_bewertung = omdbData.bewertung;
+              imdb_stimmen = omdbData.stimmen;
+            }
+          }
+
+          update.run(
+            jahr,
+            poster_url,
+            overview,
+            land,
+            regisseure,
+            autoren,
+            cast,
+            tmdb_bewertung,
+            tmdb_stimmen,
+            imdb_bewertung,
+            imdb_stimmen,
+            laufzeit_minuten,
+            row.tmdb_id
+          );
+          enriched++;
+        } catch (err) {
+          failed.push({ tmdb_id: row.tmdb_id, error: err instanceof Error ? err.message : "unbekannt" });
+        }
+        // node:20 kennt Promise.withResolvers nicht → klassische Form verwenden
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+      res.json({ geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls });
+    })
+  );
+
   return router;
 }
