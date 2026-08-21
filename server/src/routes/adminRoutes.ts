@@ -2,7 +2,8 @@ import { Router } from "express";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
-import { asyncHandler, requireAdmin, requireAuth } from "../middleware.js";
+import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
+import { syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
@@ -160,6 +161,176 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         upsert.run(a.name.trim(), a.bild);
       }
       res.json({ imported: list.length });
+    })
+  );
+
+  /**
+   * Übernimmt vollständige Kodi-Filmdatensätze (ohne TMDB-Abruf).
+   * body: { movies: [...] }
+   */
+  router.post(
+    "/kodi-import",
+    asyncHandler(async (req, res) => {
+      const movies = (req.body ?? {}).movies;
+      if (!Array.isArray(movies) || movies.length > 500) {
+        res.status(400).json({ error: "movies: Array mit maximal 500 Einträgen erforderlich" });
+        return;
+      }
+
+      interface KodiMovieInput {
+        tmdb_id: number;
+        titel: string;
+        jahr: number | null;
+        medientyp: "film" | "serie";
+        genres: string[];
+        land: string[];
+        regisseure: string[];
+        autoren: string[];
+        cast: { name: string; rolle: string }[];
+        overview: string | null;
+        poster_url: string | null;
+        tmdb_bewertung: number | null;
+        tmdb_stimmen: number | null;
+        imdb_bewertung: number | null;
+        imdb_stimmen: number | null;
+        imdb_id: string | null;
+        laufzeit_minuten: number | null;
+      }
+
+      const isStringArr = (v: unknown): v is string[] =>
+        Array.isArray(v) && v.every((x) => typeof x === "string");
+      const isCast = (v: unknown): v is { name: string; rolle: string }[] =>
+        Array.isArray(v) &&
+        v.every(
+          (x) =>
+            x !== null &&
+            typeof x === "object" &&
+            typeof (x as { name?: unknown }).name === "string" &&
+            typeof (x as { rolle?: unknown }).rolle === "string"
+        );
+      const isNumOrNull = (v: unknown): v is number | null => v === null || (typeof v === "number" && Number.isFinite(v));
+      const isRating = (v: unknown): v is number | null =>
+        v === null || (typeof v === "number" && v >= 0 && v <= 10);
+
+      const valid: KodiMovieInput[] = [];
+      for (const m of movies) {
+        if (m === null || typeof m !== "object") continue;
+        const o = m as Record<string, unknown>;
+        const tmdb_id = o.tmdb_id;
+        const titel = o.titel;
+        const medientyp = o.medientyp;
+        if (typeof tmdb_id !== "number" || !Number.isInteger(tmdb_id) || tmdb_id <= 0) continue;
+        if (typeof titel !== "string" || titel.trim().length === 0) continue;
+        if (medientyp !== "film" && medientyp !== "serie") continue;
+        if (!isStringArr(o.genres) || !isStringArr(o.land) || !isStringArr(o.regisseure) || !isStringArr(o.autoren)) continue;
+        if (!isCast(o.cast)) continue;
+        if (o.overview !== null && typeof o.overview !== "string") continue;
+        if (o.poster_url !== null && typeof o.poster_url !== "string") continue;
+        if (!isRating(o.tmdb_bewertung) || !isRating(o.imdb_bewertung)) continue;
+        if (!isNumOrNull(o.tmdb_stimmen) || !isNumOrNull(o.imdb_stimmen)) continue;
+        if (o.imdb_id !== null && typeof o.imdb_id !== "string") continue;
+        if (o.jahr !== null && (typeof o.jahr !== "number" || !Number.isInteger(o.jahr))) continue;
+        if (o.laufzeit_minuten !== null && (typeof o.laufzeit_minuten !== "number" || !Number.isInteger(o.laufzeit_minuten) || o.laufzeit_minuten <= 0)) continue;
+        valid.push({
+          tmdb_id,
+          titel: titel.trim(),
+          jahr: o.jahr as number | null,
+          medientyp,
+          genres: o.genres as string[],
+          land: o.land as string[],
+          regisseure: o.regisseure as string[],
+          autoren: o.autoren as string[],
+          cast: o.cast as { name: string; rolle: string }[],
+          overview: o.overview as string | null,
+          poster_url: o.poster_url as string | null,
+          tmdb_bewertung: o.tmdb_bewertung as number | null,
+          tmdb_stimmen: o.tmdb_stimmen as number | null,
+          imdb_bewertung: o.imdb_bewertung as number | null,
+          imdb_stimmen: o.imdb_stimmen as number | null,
+          imdb_id: o.imdb_id as string | null,
+          laufzeit_minuten: o.laufzeit_minuten as number | null,
+        });
+      }
+
+      const upsert = db.prepare(
+        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                            land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source)
+         VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
+                 @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @laufzeit_minuten, 'kodi')
+         ON CONFLICT(tmdb_id) DO UPDATE SET
+           titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
+           genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
+           tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
+           autoren = excluded.autoren, "cast" = excluded.cast, tmdb_bewertung = excluded.tmdb_bewertung,
+           tmdb_stimmen = excluded.tmdb_stimmen, imdb_bewertung = excluded.imdb_bewertung,
+           imdb_stimmen = excluded.imdb_stimmen, laufzeit_minuten = excluded.laufzeit_minuten, zuletzt_aktualisiert = datetime('now')`
+      );
+      const inCollection = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
+      const addCollection = db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)");
+      const markNeu = db.prepare(
+        "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users"
+      );
+
+      const admin = (req as AuthedRequest).user.id;
+
+      const imported: number[] = [];
+      const skipped: number[] = [];
+      const apply = db.transaction(() => {
+        for (const m of valid) {
+          if (inCollection.get(m.tmdb_id)) {
+            skipped.push(m.tmdb_id);
+            continue;
+          }
+          upsert.run({
+            tmdb_id: m.tmdb_id,
+            titel: m.titel,
+            jahr: m.jahr,
+            medientyp: m.medientyp,
+            genres: JSON.stringify(m.genres),
+            poster_url: m.poster_url,
+            overview: m.overview,
+            tmdb_json: JSON.stringify({ imdb_id: m.imdb_id }),
+            land: JSON.stringify(m.land),
+            regisseure: JSON.stringify(m.regisseure),
+            autoren: JSON.stringify(m.autoren),
+            cast: JSON.stringify(m.cast),
+            tmdb_bewertung: m.tmdb_bewertung,
+            tmdb_stimmen: m.tmdb_stimmen,
+            imdb_bewertung: m.imdb_bewertung,
+            imdb_stimmen: m.imdb_stimmen,
+            laufzeit_minuten: m.laufzeit_minuten,
+          });
+          addCollection.run(m.tmdb_id, admin);
+          markNeu.run(m.tmdb_id);
+          imported.push(m.tmdb_id);
+        }
+      });
+      apply();
+      res.json({ erhalten: movies.length, gültig: valid.length, importiert: imported.length, übersprungen: skipped.length, fehlerhaft: movies.length - valid.length });
+    })
+  );
+
+  /**
+   * Liest alle Kodi-Filme (mit TMDb-ID) direkt aus der Kodi-MySQL und importiert
+   * die in movie-db fehlenden Filme vollständig ohne TMDB-Abruf.
+   */
+  router.post(
+    "/kodi-full-sync",
+    asyncHandler(async (_req, res) => {
+      const kodiCfg: KodiSyncConfig = {
+        host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+        port: Number(process.env.KODI_DB_PORT ?? 3306),
+        database: process.env.KODI_DB_NAME ?? "MyVideos131",
+        user: process.env.KODI_DB_USER ?? "root",
+        password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+      };
+      try {
+        const result = await syncKodiMovies(db, kodiCfg);
+        res.json(result);
+      } catch (err) {
+        console.error("Kodi-Sync fehlgeschlagen:", err);
+        res.status(502).json({ error: "Kodi-Datenbank nicht erreichbar" });
+      }
     })
   );
 
