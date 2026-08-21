@@ -46,8 +46,8 @@ fi
 
 # --- 2) Ergänzung auslösen (Streaming-Fortschritt) ---
 echo "Starte Ergänzung (OMDb-Limit $OMDB_LIMIT) ..."
-echo "=== $APP/api/admin/enrich @ $(date '+%F %T') ===" >> "$LOG_FILE"
 mkdir -p "$LOG_DIR"
+echo "=== $APP/api/admin/enrich @ $(date '+%F %T') ===" >> "$LOG_FILE"
 curl -N -s -b "$COOKIE" \
     -X POST "$APP/api/admin/enrich?omdb_limit=$OMDB_LIMIT" \
     -H "Content-Type: application/json" \

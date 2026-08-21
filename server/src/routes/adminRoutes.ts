@@ -383,6 +383,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
 
       // Fortschritt streamen (NDJSON), damit das User-Script Live-Ausgabe zeigt
       res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.flushHeaders();
       res.write(JSON.stringify({ status: "start", gesamt: rows.length }) + "\n");
 
       let i = 0;
