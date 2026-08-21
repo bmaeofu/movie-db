@@ -18,6 +18,8 @@ COPY client/package.json client/package.json
 RUN npm ci --omit=dev
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/client/dist client/dist
+# Unraid-User-Scripts: werden beim Start nach /data kopiert
+COPY Kodi_movie-db_sync.py Kodi_movie-db_enrich.py /app/scripts/
 ENV DB_PATH=/data/filmdatenbank.db
 ENV PORT=3000
 VOLUME /data
