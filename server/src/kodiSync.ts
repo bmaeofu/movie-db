@@ -96,6 +96,49 @@ export async function fetchKodiPosters(
   return result;
 }
 
+/**
+ * Holt Schauspieler-Fotos aus der Kodi-art-Tabelle (media_type='actor', type='thumb').
+ * SMB-Pfade werden auf /media gemappt, http(s)-URLs übernommen. Dedupe pro Name,
+ * lokaler /media-Pfad hat Vorrang vor http-URL.
+ */
+export async function fetchKodiActorPhotos(
+  cfg: KodiSyncConfig
+): Promise<{ name: string; bild: string }[]> {
+  const conn = await mysql.createConnection({
+    host: cfg.host,
+    port: cfg.port,
+    database: cfg.database,
+    user: cfg.user,
+    password: cfg.password,
+  });
+  try {
+    const [rows] = await conn.query(
+      `SELECT a.name, ar.url
+       FROM actor a
+       JOIN art ar ON ar.media_type = 'actor' AND ar.media_id = a.actor_id AND ar.type = 'thumb'`
+    ) as [{ name: string | null; url: string | null }[], unknown];
+    const byName = new Map<string, string>();
+    for (const r of rows) {
+      const name = String(r.name ?? "").trim();
+      if (!name) continue;
+      const url = String(r.url ?? "");
+      let bild: string | null = null;
+      if (url.startsWith(SMB_PREFIX)) {
+        bild = "/media" + url.slice(SMB_PREFIX.length);
+      } else if (url.startsWith("http://") || url.startsWith("https://")) {
+        bild = url;
+      } else {
+        continue;
+      }
+      const cur = byName.get(name);
+      if (!cur || (cur.startsWith("http") && bild.startsWith("/media"))) byName.set(name, bild);
+    }
+    return [...byName].map(([name, bild]) => ({ name, bild }));
+  } finally {
+    await conn.end();
+  }
+}
+
 export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig): Promise<{
   geprüft: number;
   importiert: number;

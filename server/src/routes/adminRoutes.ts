@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
-import { fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
+import { fetchKodiActorPhotos, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
@@ -619,6 +619,53 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       });
       apply();
       res.end(JSON.stringify({ status: "done", geprüft: rows.length, aktualisiert: updated }) + "\n");
+    })
+  );
+
+  /**
+   * Importiert fehlende Schauspieler-Fotos aus der Kodi-art-Tabelle in die actors-Tabelle.
+   */
+  router.post(
+    "/enrich-actors",
+    asyncHandler(async (_req, res) => {
+      const kodiCfg: KodiSyncConfig = {
+        host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+        port: Number(process.env.KODI_DB_PORT ?? 3306),
+        database: process.env.KODI_DB_NAME ?? "MyVideos131",
+        user: process.env.KODI_DB_USER ?? "root",
+        password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+      };
+
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.flushHeaders();
+      res.write(JSON.stringify({ status: "start" }) + "\n");
+
+      let photos: { name: string; bild: string }[];
+      try {
+        photos = await fetchKodiActorPhotos(kodiCfg);
+      } catch (err) {
+        console.error("Kodi-Actor-Abruf fehlgeschlagen:", err);
+        res.end(JSON.stringify({ status: "done", error: "Kodi-Datenbank nicht erreichbar" }) + "\n");
+        return;
+      }
+
+      // Nur fehlende Namen einfügen (bestehende nicht überschreiben)
+      const insert = db.prepare(
+        "INSERT OR IGNORE INTO actors (name, bild, zuletzt_aktualisiert) VALUES (?, ?, datetime('now'))"
+      );
+      let imported = 0;
+      let i = 0;
+      const apply = db.transaction(() => {
+        for (const p of photos) {
+          i++;
+          if (insert.run(p.name, p.bild).changes > 0) imported++;
+          if (i % 500 === 0) {
+            res.write(JSON.stringify({ status: "progress", verarbeitet: i, gesamt: photos.length, importiert: imported }) + "\n");
+          }
+        }
+      });
+      apply();
+      res.end(JSON.stringify({ status: "done", geprüft: photos.length, importiert: imported }) + "\n");
     })
   );
 
