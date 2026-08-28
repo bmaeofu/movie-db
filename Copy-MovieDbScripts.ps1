@@ -8,7 +8,8 @@ $repoDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $target  = "\\192.168.178.75\appdata\movie-db"
 $files   = @(
     "Kodi_movie-db_sync.py",
-    "Kodi_movie-db_enrich.py"
+    "Kodi_movie-db_enrich.py",
+    "Kodi_movie-db_poster.py"
 )
 
 if (-not (Test-Path $target)) {
