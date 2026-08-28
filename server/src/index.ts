@@ -24,7 +24,8 @@ function copyScripts(): void {
     const src = path.join(srcDir, file);
     try {
       fs.copyFileSync(src, path.join(dataDir, file));
-      fs.chmodSync(path.join(dataDir, file), 0o755);
+      // 666: damit das SMB-Backup-/Kopier-Script (Host-Benutzer) die Dateien überschreiben kann
+      fs.chmodSync(path.join(dataDir, file), 0o666);
     } catch (err) {
       console.error(`Skript ${file} konnte nicht nach /data kopiert werden:`, err);
     }
