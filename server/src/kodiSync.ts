@@ -44,10 +44,56 @@ function splitList(value: string | null): string[] {
 }
 
 /** Kodi-SMB-Posterpfad → vom Frontend ladbarer /media-Pfad (nur im gemounteten Ordner). */
-function posterUrl(smb: string | null): string | null {
+export function posterUrl(smb: string | null): string | null {
   if (!smb || !smb.startsWith(SMB_PREFIX)) return null;
   const rel = smb.slice(SMB_PREFIX.length);
   return rel ? "/media" + rel : null;
+}
+
+/**
+ * Holt Poster-URLs aus der Kodi-art-Tabelle für die angegebenen TMDb-IDs.
+ * SMB-Pfade werden auf /media gemappt, http(s)-URLs direkt übernommen.
+ * Liefert Map tmdb_id → nutzbarer poster_url.
+ */
+export async function fetchKodiPosters(
+  cfg: KodiSyncConfig,
+  tmdbIds: number[]
+): Promise<Map<number, string>> {
+  const result = new Map<number, string>();
+  if (tmdbIds.length === 0) return result;
+  const conn = await mysql.createConnection({
+    host: cfg.host,
+    port: cfg.port,
+    database: cfg.database,
+    user: cfg.user,
+    password: cfg.password,
+  });
+  try {
+    for (let i = 0; i < tmdbIds.length; i += 500) {
+      const chunk = tmdbIds.slice(i, i + 500);
+      const [rows] = await conn.query(
+        `SELECT u.value AS tmdb_id, a.url
+         FROM art a
+         JOIN uniqueid u ON u.media_id = a.media_id AND u.media_type = 'movie'
+         WHERE a.media_type = 'movie' AND a.type = 'poster'
+           AND u.type = 'tmdb' AND u.value IN (${chunk.join(",")})`
+      ) as [{ tmdb_id: string; url: string }[], unknown];
+      for (const row of rows) {
+        const id = Number(row.tmdb_id);
+        if (result.has(id)) continue;
+        const url = row.url;
+        const mapped = url.startsWith("smb://")
+          ? posterUrl(url)
+          : url.startsWith("http://") || url.startsWith("https://")
+            ? url
+            : null;
+        if (mapped) result.set(id, mapped);
+      }
+    }
+  } finally {
+    await conn.end();
+  }
+  return result;
 }
 
 export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig): Promise<{

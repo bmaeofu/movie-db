@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
-import { syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
+import { fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
@@ -569,6 +569,56 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       });
       apply();
       res.json({ erhalten: items.length, gültig: valid.length, aktualisiert: updated });
+    })
+  );
+
+  /**
+   * Trägt fehlende Poster aus der Kodi-art-Tabelle nach (source=kodi, poster_url IS NULL).
+   */
+  router.post(
+    "/enrich-posters",
+    asyncHandler(async (_req, res) => {
+      const kodiCfg: KodiSyncConfig = {
+        host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+        port: Number(process.env.KODI_DB_PORT ?? 3306),
+        database: process.env.KODI_DB_NAME ?? "MyVideos131",
+        user: process.env.KODI_DB_USER ?? "root",
+        password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+      };
+      const rows = db
+        .prepare("SELECT tmdb_id FROM movies WHERE source = 'kodi' AND poster_url IS NULL AND tmdb_id > 0")
+        .all() as { tmdb_id: number }[];
+
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.flushHeaders();
+      res.write(JSON.stringify({ status: "start", gesamt: rows.length }) + "\n");
+
+      let posters: Map<number, string>;
+      try {
+        posters = await fetchKodiPosters(kodiCfg, rows.map((r) => r.tmdb_id));
+      } catch (err) {
+        console.error("Kodi-Poster-Abruf fehlgeschlagen:", err);
+        res.end(JSON.stringify({ status: "done", error: "Kodi-Datenbank nicht erreichbar" }) + "\n");
+        return;
+      }
+
+      const update = db.prepare(
+        "UPDATE movies SET poster_url = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?"
+      );
+      let updated = 0;
+      let i = 0;
+      const apply = db.transaction(() => {
+        for (const row of rows) {
+          i++;
+          const url = posters.get(row.tmdb_id);
+          if (url && update.run(url, row.tmdb_id).changes > 0) updated++;
+          if (i % 50 === 0) {
+            res.write(JSON.stringify({ status: "progress", verarbeitet: i, gesamt: rows.length, aktualisiert: updated }) + "\n");
+          }
+        }
+      });
+      apply();
+      res.end(JSON.stringify({ status: "done", geprüft: rows.length, aktualisiert: updated }) + "\n");
     })
   );
 
