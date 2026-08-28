@@ -9,7 +9,8 @@ $target  = "\\192.168.178.75\appdata\movie-db"
 $files   = @(
     "Kodi_movie-db_sync.py",
     "Kodi_movie-db_enrich.py",
-    "Kodi_movie-db_poster.py"
+    "Kodi_movie-db_poster.py",
+    "Kodi_movie-db_actors.py"
 )
 
 if (-not (Test-Path $target)) {
