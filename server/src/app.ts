@@ -29,10 +29,10 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use("/api/users", createUserRouter(db));
   app.use("/api/admin", createAdminRouter(db, tmdb, options.omdb));
   app.use("/api/search", createSearchRouter(db, tmdb));
-  app.use("/api/collection", createCollectionRouter(db, tmdb, options.omdb));
+  const mediaDir = options.mediaDir ?? "/media";
+  app.use("/api/collection", createCollectionRouter(db, tmdb, options.omdb, mediaDir));
   app.use("/api/movies", createMovieRouter(db));
   app.use("/api/lists", createListRouter(db));
-  const mediaDir = options.mediaDir ?? "/media";
   app.use("/api/actors", createActorRouter(db, mediaDir));
   // Lokale Kodi-Poster (smb-Pfad → /media/…) aus dem gemounteten Medien-Ordner
   app.use("/media", express.static(mediaDir));

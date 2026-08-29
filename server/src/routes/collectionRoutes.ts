@@ -1,4 +1,6 @@
 import { Router } from "express";
+import fs from "node:fs";
+import path from "node:path";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
@@ -96,7 +98,12 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   return { where, params };
 }
 
-export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
+export function createCollectionRouter(
+  db: Database.Database,
+  tmdb: TmdbClient,
+  omdb?: OmdbClient,
+  mediaDir?: string
+): Router {
   const router = Router();
   router.use(requireAuth(db));
   const upsertMovie = db.prepare(
@@ -431,7 +438,16 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
 
       const filled: string[] = [];
       const jahr = row.jahr ?? m.jahr;
-      const poster_url = row.poster_url ?? m.poster_url;
+      // /media-Poster, dessen Datei fehlt, gilt als Lücke → TMDB-Poster versuchen
+      let poster_url = row.poster_url ?? m.poster_url;
+      const brokenMedia =
+        poster_url !== null &&
+        poster_url.startsWith("/media/") &&
+        mediaDir !== undefined &&
+        !fs.existsSync(path.join(mediaDir, poster_url.slice("/media".length)));
+      if (brokenMedia) {
+        poster_url = m.poster_url;
+      }
       const overview = row.overview ?? m.overview;
       const land = row.land === "[]" ? JSON.stringify(m.land) : row.land;
       const regisseure = row.regisseure === "[]" ? JSON.stringify(m.regisseure) : row.regisseure;
@@ -460,7 +476,7 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       ).run(jahr, poster_url, overview, land, regisseure, autoren, cast, tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, tmdbId);
 
       if (row.jahr === null && jahr !== null) filled.push("jahr");
-      if (row.poster_url === null && poster_url !== null) filled.push("poster");
+      if ((row.poster_url === null || brokenMedia) && poster_url !== null) filled.push("poster");
       if (row.overview === null && overview !== null) filled.push("overview");
       if (row.land === "[]" && land !== "[]") filled.push("land");
       if (row.regisseure === "[]" && regisseure !== "[]") filled.push("regisseure");
