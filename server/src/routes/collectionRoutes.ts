@@ -4,6 +4,7 @@ import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
+import { fetchKodiActorPhotos, fetchKodiPosters, type KodiSyncConfig } from "../kodiSync.js";
 
 function buildFilter(query: Record<string, unknown>): { where: string[]; params: Record<string, unknown> } {
   const q = typeof query.q === "string" ? query.q.trim() : "";
@@ -379,6 +380,136 @@ export function createCollectionRouter(db: Database.Database, tmdb: TmdbClient, 
       }
       db.prepare("DELETE FROM collection WHERE tmdb_id = ?").run(tmdbId);
       res.status(204).end();
+    })
+  );
+
+  // Vervollständigt einen einzelnen Film (fehlende Felder aus TMDB/OMDb + Kodi-Poster/Schauspieler).
+  router.post(
+    "/:tmdbId/enrich",
+    asyncHandler(async (req, res) => {
+      const tmdbId = Number(req.params.tmdbId);
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
+        res.status(400).json({ error: "tmdb_id erforderlich" });
+        return;
+      }
+      const row = db
+        .prepare(
+          `SELECT tmdb_id, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
+                  tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten
+           FROM movies WHERE tmdb_id = ?`
+        )
+        .get(tmdbId) as
+        | {
+            tmdb_id: number;
+            medientyp: "film" | "serie";
+            jahr: number | null;
+            poster_url: string | null;
+            overview: string | null;
+            land: string;
+            regisseure: string;
+            autoren: string;
+            cast: string;
+            tmdb_bewertung: number | null;
+            tmdb_stimmen: number | null;
+            imdb_bewertung: number | null;
+            imdb_stimmen: number | null;
+            laufzeit_minuten: number | null;
+          }
+        | undefined;
+      if (!row) {
+        res.status(404).json({ error: "Film nicht gefunden" });
+        return;
+      }
+
+      let m;
+      try {
+        m = await tmdb.details(tmdbId, row.medientyp);
+      } catch {
+        res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
+        return;
+      }
+
+      const filled: string[] = [];
+      const jahr = row.jahr ?? m.jahr;
+      const poster_url = row.poster_url ?? m.poster_url;
+      const overview = row.overview ?? m.overview;
+      const land = row.land === "[]" ? JSON.stringify(m.land) : row.land;
+      const regisseure = row.regisseure === "[]" ? JSON.stringify(m.regisseure) : row.regisseure;
+      const autoren = row.autoren === "[]" ? JSON.stringify(m.autoren) : row.autoren;
+      const cast = row.cast === "[]" ? JSON.stringify(m.cast) : row.cast;
+      const tmdb_bewertung = row.tmdb_bewertung ?? m.tmdb_bewertung;
+      const tmdb_stimmen = row.tmdb_stimmen ?? m.tmdb_stimmen;
+      const laufzeit_minuten = row.laufzeit_minuten ?? m.laufzeit_minuten;
+
+      let imdb_bewertung = row.imdb_bewertung;
+      let imdb_stimmen = row.imdb_stimmen;
+      if (imdb_bewertung === null && omdb !== undefined) {
+        const omdbData = await omdb.rating(m.imdb_id);
+        if (omdbData) {
+          imdb_bewertung = omdbData.bewertung;
+          imdb_stimmen = omdbData.stimmen;
+          filled.push("imdb_bewertung");
+        }
+      }
+
+      db.prepare(
+        `UPDATE movies SET jahr = ?, poster_url = ?, overview = ?, land = ?, regisseure = ?, autoren = ?, "cast" = ?,
+                          tmdb_bewertung = ?, tmdb_stimmen = ?, imdb_bewertung = ?, imdb_stimmen = ?, laufzeit_minuten = ?,
+                          zuletzt_aktualisiert = datetime('now')
+         WHERE tmdb_id = ?`
+      ).run(jahr, poster_url, overview, land, regisseure, autoren, cast, tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, tmdbId);
+
+      if (row.jahr === null && jahr !== null) filled.push("jahr");
+      if (row.poster_url === null && poster_url !== null) filled.push("poster");
+      if (row.overview === null && overview !== null) filled.push("overview");
+      if (row.land === "[]" && land !== "[]") filled.push("land");
+      if (row.regisseure === "[]" && regisseure !== "[]") filled.push("regisseure");
+      if (row.autoren === "[]" && autoren !== "[]") filled.push("autoren");
+      if (row.cast === "[]" && cast !== "[]") filled.push("cast");
+      if (row.tmdb_bewertung === null && tmdb_bewertung !== null) filled.push("tmdb_bewertung");
+      if (row.laufzeit_minuten === null && laufzeit_minuten !== null) filled.push("laufzeit");
+
+      const kodiCfg: KodiSyncConfig = {
+        host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+        port: Number(process.env.KODI_DB_PORT ?? 3306),
+        database: process.env.KODI_DB_NAME ?? "MyVideos131",
+        user: process.env.KODI_DB_USER ?? "root",
+        password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+      };
+
+      // Kodi-Poster, falls TMDB keins liefert
+      if (!poster_url) {
+        try {
+          const posters = await fetchKodiPosters(kodiCfg, [tmdbId]);
+          const kodiPoster = posters.get(tmdbId);
+          if (kodiPoster) {
+            db.prepare("UPDATE movies SET poster_url = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?").run(kodiPoster, tmdbId);
+            filled.push("poster_kodi");
+          }
+        } catch {
+          // Kodi nicht erreichbar → ignorieren
+        }
+      }
+
+      // Kodi-Schauspieler-Fotos für den Cast
+      const castNames = (JSON.parse(cast) as { name: string }[]).map((c) => c.name);
+      if (castNames.length > 0) {
+        try {
+          const photos = await fetchKodiActorPhotos(kodiCfg, castNames);
+          if (photos.length > 0) {
+            const insert = db.prepare(
+              "INSERT OR IGNORE INTO actors (name, bild, zuletzt_aktualisiert) VALUES (?, ?, datetime('now'))"
+            );
+            let n = 0;
+            for (const p of photos) if (insert.run(p.name, p.bild).changes > 0) n++;
+            if (n > 0) filled.push(`schauspieler_fotos:${n}`);
+          }
+        } catch {
+          // Kodi nicht erreichbar → ignorieren
+        }
+      }
+
+      res.json({ tmdb_id: tmdbId, ergänzt: filled });
     })
   );
 

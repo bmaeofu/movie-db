@@ -102,7 +102,8 @@ export async function fetchKodiPosters(
  * lokaler /media-Pfad hat Vorrang vor http-URL.
  */
 export async function fetchKodiActorPhotos(
-  cfg: KodiSyncConfig
+  cfg: KodiSyncConfig,
+  names?: string[]
 ): Promise<{ name: string; bild: string }[]> {
   const conn = await mysql.createConnection({
     host: cfg.host,
@@ -112,11 +113,15 @@ export async function fetchKodiActorPhotos(
     password: cfg.password,
   });
   try {
-    const [rows] = await conn.query(
-      `SELECT a.name, ar.url
+    let sql = `SELECT a.name, ar.url
        FROM actor a
-       JOIN art ar ON ar.media_type = 'actor' AND ar.media_id = a.actor_id AND ar.type = 'thumb'`
-    ) as [{ name: string | null; url: string | null }[], unknown];
+       JOIN art ar ON ar.media_type = 'actor' AND ar.media_id = a.actor_id AND ar.type = 'thumb'`;
+    const params: string[] = [];
+    if (names && names.length > 0) {
+      sql += ` AND a.name IN (${names.map(() => "?").join(",")})`;
+      params.push(...names);
+    }
+    const [rows] = await conn.query(sql, params) as [{ name: string | null; url: string | null }[], unknown];
     const byName = new Map<string, string>();
     for (const r of rows) {
       const name = String(r.name ?? "").trim();

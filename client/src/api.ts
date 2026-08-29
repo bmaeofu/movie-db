@@ -82,6 +82,8 @@ export const api = {
     request<{ count: number }>("/api/collection/count?" + new URLSearchParams(filters).toString()),
   addToCollection: (tmdb_id: number, medientyp: string) =>
     request<{ message: string }>("/api/collection", { method: "POST", body: JSON.stringify({ tmdb_id, medientyp }) }),
+  enrichFilm: (tmdb_id: number) =>
+    request<{ ergänzt: string[] }>(`/api/collection/${tmdb_id}/enrich`, { method: "POST", body: "{}" }),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

@@ -42,6 +42,22 @@ export default function MovieDetailModal({
   const [saved, setSaved] = useState("");
   const [savedIsError, setSavedIsError] = useState(false);
   const [showPictures, setShowPictures] = useState(false);
+  const [enrichMsg, setEnrichMsg] = useState("");
+  const [enrichBusy, setEnrichBusy] = useState(false);
+
+  async function enrich() {
+    setEnrichBusy(true);
+    setEnrichMsg("");
+    try {
+      const r = await api.enrichFilm(movie.tmdb_id);
+      setEnrichMsg(r.ergänzt.length ? `Ergänzt: ${r.ergänzt.join(", ")}` : "Keine Lücken gefunden.");
+      onChanged();
+    } catch (err) {
+      setEnrichMsg(err instanceof Error ? `Fehler: ${err.message}` : "Fehler");
+    } finally {
+      setEnrichBusy(false);
+    }
+  }
 
   useEffect(() => {
     api.lists().then(setLists).catch(() => {});
@@ -181,6 +197,13 @@ export default function MovieDetailModal({
               {label}
             </button>
           ))}
+        </div>
+
+        <div className="enrich">
+          <button className="primary" onClick={enrich} disabled={enrichBusy}>
+            {enrichBusy ? "Vervollständige …" : "Fehlende Daten nachtragen"}
+          </button>
+          {enrichMsg && <span>{enrichMsg}</span>}
         </div>
 
         <div className="note">
