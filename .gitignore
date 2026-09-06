@@ -16,3 +16,6 @@ playwright-report/
 movies_with_corrected_tmdb_id.txt
 unclear_tmdb_cases.txt
 no_land_films.txt
+kodi_orphan_films.txt
+incomplete_films.tsv
+kodi_noposter_app_has_poster.tsv
