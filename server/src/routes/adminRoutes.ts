@@ -1,10 +1,16 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
+import { appendFileSync, mkdirSync } from "node:fs";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
 import { fetchKodiActorPhotos, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 
+const ENRICH_LOG = "/data/logs/enrich.log";
+function logEnrich(event: Record<string, unknown>): void {
+  mkdirSync("/data/logs", { recursive: true });
+  appendFileSync(ENRICH_LOG, JSON.stringify({ zeit: new Date().toISOString(), ...event }) + "\n", "utf8");
+}
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db), requireAdmin);
@@ -364,6 +370,10 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
   router.post(
     "/enrich",
     asyncHandler(async (req, res) => {
+      let aborted = false;
+      req.on("close", () => {
+        if (!res.writableEnded) aborted = true;
+      });
       const omdbLimitRaw = Number(req.query.omdb_limit);
       const omdbLimit = Number.isFinite(omdbLimitRaw) ? omdbLimitRaw : Infinity;
       const allowedFields = ["jahr", "poster", "overview", "land", "regisseure", "autoren", "cast", "imdb_bewertung", "laufzeit"] as const;
@@ -396,6 +406,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           land: string; regisseure: string; autoren: string; cast: string; tmdb_bewertung: number | null; tmdb_stimmen: number | null;
           imdb_bewertung: number | null; imdb_stimmen: number | null; laufzeit_minuten: number | null;
         }[];
+      logEnrich({ event: "start", gesamt: rows.length, felder: [...selectedFields] });
 
       const update = db.prepare(
         `UPDATE movies SET jahr = ?, poster_url = ?, overview = ?, land = ?, regisseure = ?, autoren = ?, "cast" = ?,
@@ -415,6 +426,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
 
       let i = 0;
       for (const row of rows) {
+        if (aborted) break;
         i++;
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
@@ -457,10 +469,12 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             row.tmdb_id
           );
           enriched++;
+          logEnrich({ event: "film", position: i, gesamt: rows.length, tmdb_id: row.tmdb_id, titel: row.titel?.trim() || "Unbekannter Titel", ergänzt: enriched });
         } catch (err) {
-          failed.push({ tmdb_id: row.tmdb_id, error: err instanceof Error ? err.message : "unbekannt" });
+          const error = err instanceof Error ? err.message : "unbekannt";
+          failed.push({ tmdb_id: row.tmdb_id, error });
+          logEnrich({ event: "error", position: i, tmdb_id: row.tmdb_id, titel: row.titel?.trim() || "Unbekannter Titel", error });
         }
-        // node:20 kennt Promise.withResolvers nicht → klassische Form verwenden
         await new Promise((resolve) => setTimeout(resolve, 120));
 
         res.write(
@@ -474,9 +488,13 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           }) + "\n"
         );
       }
-      res.end(
-        JSON.stringify({ status: "done", geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls }) + "\n"
-      );
+      if (aborted) {
+        logEnrich({ event: "aborted", geprüft: i, ergänzt: enriched, fehlgeschlagen: failed.length, omdb_calls: omdbCalls });
+        res.end(JSON.stringify({ status: "aborted", geprüft: i, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls }) + "\n");
+        return;
+      }
+      logEnrich({ event: "done", geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed.length, omdb_calls: omdbCalls });
+      res.end(JSON.stringify({ status: "done", geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls }) + "\n");
     })
   );
 

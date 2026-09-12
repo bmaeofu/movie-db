@@ -100,8 +100,8 @@ export const api = {
   enrichFilm: (tmdb_id: number) =>
     request<{ ergänzt: string[] }>(`/api/collection/${tmdb_id}/enrich`, { method: "POST", body: "{}" }),
   enrichPreview: () => request<EnrichPreview>("/api/admin/enrich-preview"),
-  enrich: (fields: EnrichField[], onLine: (line: unknown) => void) =>
-    fetch("/api/admin/enrich?omdb_limit=900", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) }).then(async (res) => {
+  enrich: (fields: EnrichField[], onLine: (line: unknown) => void, signal?: AbortSignal) =>
+    fetch("/api/admin/enrich?omdb_limit=900", { method: "POST", credentials: "same-origin", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) }).then(async (res) => {
       if (!res.ok) throw new Error(`Fehler ${res.status}`);
       const text = await res.text();
       for (const line of text.split("\n").filter(Boolean)) onLine(JSON.parse(line));
