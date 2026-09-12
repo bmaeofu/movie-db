@@ -148,6 +148,7 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
   geprüft: number;
   importiert: number;
   übersprungen: number;
+  importierte_filme: { tmdb_id: number; titel: string }[];
 }> {
   const conn = await mysql.createConnection({
     host: cfg.host,
@@ -232,6 +233,7 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
       | undefined)?.id ?? 0;
 
     let importiert = 0;
+    const importierteFilme: { tmdb_id: number; titel: string }[] = [];
     let übersprungen = 0;
     const apply = db.transaction(() => {
       for (const row of movieRows) {
@@ -265,12 +267,12 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
         });
         addCollection.run(tmdbId, admin);
         markNeu.run(tmdbId);
+        importierteFilme.push({ tmdb_id: tmdbId, titel: row.titel?.trim() || "Unbekannter Titel" });
         importiert++;
       }
     });
     apply();
-
-    return { geprüft: movieRows.length, importiert, übersprungen };
+    return { geprüft: movieRows.length, importiert, übersprungen, importierte_filme: importierteFilme };
   } finally {
     await conn.end();
   }
