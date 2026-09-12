@@ -624,7 +624,8 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
   );
 
   /**
-   * Trägt fehlende Poster aus der Kodi-art-Tabelle nach (source=kodi, poster_url IS NULL).
+   * Synchronisiert lokale Kodi-Poster für alle positiven Einträge. Lokale /media-URLs
+   * haben Vorrang; vorhandene TMDB-URLs bleiben Fallback, wenn Kodi kein Poster liefert.
    */
   router.post(
     "/enrich-posters",
@@ -637,7 +638,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
       };
       const rows = db
-        .prepare("SELECT tmdb_id FROM movies WHERE source = 'kodi' AND poster_url IS NULL AND tmdb_id > 0")
+        .prepare("SELECT tmdb_id FROM movies WHERE tmdb_id > 0")
         .all() as { tmdb_id: number }[];
 
       res.setHeader("Content-Type", "application/json; charset=utf-8");
