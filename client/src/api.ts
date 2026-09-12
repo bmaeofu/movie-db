@@ -4,6 +4,21 @@ export interface User {
   is_admin: number;
 }
 
+export interface EnrichPreview {
+  gesamt: number;
+  jahr: number;
+  poster: number;
+  overview: number;
+  land: number;
+  regisseure: number;
+  autoren: number;
+  cast: number;
+  imdb_bewertung: number;
+  laufzeit: number;
+}
+
+export type EnrichField = "jahr" | "poster" | "overview" | "land" | "regisseure" | "autoren" | "cast" | "imdb_bewertung" | "laufzeit";
+
 export interface SearchResult {
   tmdb_id: number;
   titel: string;
@@ -84,6 +99,13 @@ export const api = {
     request<{ message: string }>("/api/collection", { method: "POST", body: JSON.stringify({ tmdb_id, medientyp }) }),
   enrichFilm: (tmdb_id: number) =>
     request<{ ergänzt: string[] }>(`/api/collection/${tmdb_id}/enrich`, { method: "POST", body: "{}" }),
+  enrichPreview: () => request<EnrichPreview>("/api/admin/enrich-preview"),
+  enrich: (fields: EnrichField[], onLine: (line: unknown) => void) =>
+    fetch("/api/admin/enrich?omdb_limit=900", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) }).then(async (res) => {
+      if (!res.ok) throw new Error(`Fehler ${res.status}`);
+      const text = await res.text();
+      for (const line of text.split("\n").filter(Boolean)) onLine(JSON.parse(line));
+    }),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

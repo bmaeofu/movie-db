@@ -338,37 +338,64 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
    * Ergänzt fehlende Felder aus TMDB/OMDb (ohne vorhandene Kodi-Werte zu überschreiben).
    * ?omdb_limit=N begrenzt OMDb-Aufrufe/Tag.
    */
+  router.get(
+    "/enrich-preview",
+    asyncHandler(async (_req, res) => {
+      const row = db
+        .prepare(
+          `SELECT
+             COUNT(*) AS gesamt,
+             SUM(jahr IS NULL) AS jahr,
+             SUM(poster_url IS NULL) AS poster,
+             SUM(overview IS NULL) AS overview,
+             SUM(land = '[]') AS land,
+             SUM(regisseure = '[]') AS regisseure,
+             SUM(autoren = '[]') AS autoren,
+             SUM("cast" = '[]') AS cast,
+             SUM(imdb_bewertung IS NULL) AS imdb_bewertung,
+             SUM(laufzeit_minuten IS NULL) AS laufzeit
+           FROM movies WHERE tmdb_id > 0`
+        )
+        .get() as Record<string, number | null>;
+      res.json(Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value ?? 0])));
+    })
+  );
+
   router.post(
     "/enrich",
     asyncHandler(async (req, res) => {
       const omdbLimitRaw = Number(req.query.omdb_limit);
       const omdbLimit = Number.isFinite(omdbLimitRaw) ? omdbLimitRaw : Infinity;
+      const allowedFields = ["jahr", "poster", "overview", "land", "regisseure", "autoren", "cast", "imdb_bewertung", "laufzeit"] as const;
+      const requestedFields = Array.isArray(req.body?.fields) ? req.body.fields.filter((field: unknown): field is (typeof allowedFields)[number] => typeof field === "string" && allowedFields.includes(field as (typeof allowedFields)[number])) : [];
+      const selectedFields = new Set<(typeof allowedFields)[number]>(requestedFields.length ? requestedFields : [...allowedFields]);
       const rows = db
         .prepare(
           `SELECT tmdb_id, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
                   tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten
-           FROM movies
-           WHERE tmdb_id > 0
-             AND (jahr IS NULL OR poster_url IS NULL OR overview IS NULL
-                  OR land = '[]' OR regisseure = '[]' OR autoren = '[]' OR "cast" = '[]'
-                  OR imdb_bewertung IS NULL)`
+           FROM movies WHERE tmdb_id > 0`
         )
-        .all() as {
-        tmdb_id: number;
-        medientyp: "film" | "serie";
-        jahr: number | null;
-        poster_url: string | null;
-        overview: string | null;
-        land: string;
-        regisseure: string;
-        autoren: string;
-        cast: string;
-        tmdb_bewertung: number | null;
-        tmdb_stimmen: number | null;
-        imdb_bewertung: number | null;
-        imdb_stimmen: number | null;
-        laufzeit_minuten: number | null;
-      }[];
+        .all()
+        .filter((row) => {
+          const value = row as {
+            jahr: number | null; poster_url: string | null; overview: string | null; land: string;
+            regisseure: string; autoren: string; cast: string; imdb_bewertung: number | null; laufzeit_minuten: number | null;
+          };
+          return [...selectedFields].some((field) =>
+            field === "jahr" ? value.jahr === null :
+            field === "poster" ? value.poster_url === null :
+            field === "overview" ? value.overview === null :
+            field === "land" ? value.land === "[]" :
+            field === "regisseure" ? value.regisseure === "[]" :
+            field === "autoren" ? value.autoren === "[]" :
+            field === "cast" ? value.cast === "[]" :
+            field === "imdb_bewertung" ? value.imdb_bewertung === null : value.laufzeit_minuten === null
+          );
+        }) as {
+          tmdb_id: number; medientyp: "film" | "serie"; jahr: number | null; poster_url: string | null; overview: string | null;
+          land: string; regisseure: string; autoren: string; cast: string; tmdb_bewertung: number | null; tmdb_stimmen: number | null;
+          imdb_bewertung: number | null; imdb_stimmen: number | null; laufzeit_minuten: number | null;
+        }[];
 
       const update = db.prepare(
         `UPDATE movies SET jahr = ?, poster_url = ?, overview = ?, land = ?, regisseure = ?, autoren = ?, "cast" = ?,
@@ -392,21 +419,20 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         try {
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
 
-          // Nur fehlende Werte füllen; vorhandene Kodi-Werte bleiben erhalten
-          const jahr = row.jahr ?? m.jahr;
-          const poster_url = row.poster_url ?? m.poster_url;
-          const overview = row.overview ?? m.overview;
-          const land = row.land === "[]" ? JSON.stringify(m.land) : row.land;
-          const regisseure = row.regisseure === "[]" ? JSON.stringify(m.regisseure) : row.regisseure;
-          const autoren = row.autoren === "[]" ? JSON.stringify(m.autoren) : row.autoren;
-          const cast = row.cast === "[]" ? JSON.stringify(m.cast) : row.cast;
+          const jahr = selectedFields.has("jahr") ? row.jahr ?? m.jahr : row.jahr;
+          const poster_url = selectedFields.has("poster") ? row.poster_url ?? m.poster_url : row.poster_url;
+          const overview = selectedFields.has("overview") ? row.overview ?? m.overview : row.overview;
+          const land = selectedFields.has("land") && row.land === "[]" ? JSON.stringify(m.land) : row.land;
+          const regisseure = selectedFields.has("regisseure") && row.regisseure === "[]" ? JSON.stringify(m.regisseure) : row.regisseure;
+          const autoren = selectedFields.has("autoren") && row.autoren === "[]" ? JSON.stringify(m.autoren) : row.autoren;
+          const cast = selectedFields.has("cast") && row.cast === "[]" ? JSON.stringify(m.cast) : row.cast;
           const tmdb_bewertung = row.tmdb_bewertung ?? m.tmdb_bewertung;
           const tmdb_stimmen = row.tmdb_stimmen ?? m.tmdb_stimmen;
-          const laufzeit_minuten = row.laufzeit_minuten ?? m.laufzeit_minuten;
+          const laufzeit_minuten = selectedFields.has("laufzeit") ? row.laufzeit_minuten ?? m.laufzeit_minuten : row.laufzeit_minuten;
 
           let imdb_bewertung = row.imdb_bewertung;
           let imdb_stimmen = row.imdb_stimmen;
-          if (imdb_bewertung === null && omdb !== undefined && omdbCalls < omdbLimit) {
+          if (selectedFields.has("imdb_bewertung") && imdb_bewertung === null && omdb !== undefined && omdbCalls < omdbLimit) {
             const omdbData = await omdb.rating(m.imdb_id);
             omdbCalls++;
             if (omdbData) {
