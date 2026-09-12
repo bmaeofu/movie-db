@@ -129,4 +129,34 @@ describe("Admin-Backfill", () => {
     const row = db.prepare("SELECT bild FROM actors WHERE name = 'Leonardo DiCaprio'").get() as { bild: string };
     expect(row.bild).toBe("https://neu"); // UPSERT
   });
+
+  it("enrich: normaler Lauf endet mit done und füllt nur gewählte Felder", async () => {
+    enriched = true;
+    const res = await request(app)
+      .post("/api/admin/enrich")
+      .set("Cookie", adminCookie)
+      .send({ fields: ["land"] })
+      .buffer(true)
+      .parse((response, callback) => {
+        let text = "";
+        response.on("data", (chunk: Buffer) => {
+          text += chunk.toString();
+        });
+        response.on("end", () => callback(null, text));
+      });
+    expect(res.status).toBe(200);
+    const lines = (res.body as string).trim().split("\n").filter(Boolean);
+    const last = JSON.parse(lines[lines.length - 1]) as {
+      status: string;
+      ergänzt: number;
+    };
+    expect(last.status).toBe("done");
+    expect(last.ergänzt).toBe(1);
+    const row = db.prepare("SELECT land, overview FROM movies WHERE tmdb_id = 27205").get() as {
+      land: string;
+      overview: string | null;
+    };
+    expect(JSON.parse(row.land)).toEqual(["Deutschland"]);
+    expect(row.overview).toBeNull(); // Plot war nicht ausgewählt
+  });
 });
