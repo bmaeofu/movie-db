@@ -371,7 +371,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       const selectedFields = new Set<(typeof allowedFields)[number]>(requestedFields.length ? requestedFields : [...allowedFields]);
       const rows = db
         .prepare(
-          `SELECT tmdb_id, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
+          `SELECT tmdb_id, titel, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
                   tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten
            FROM movies WHERE tmdb_id > 0`
         )
@@ -392,7 +392,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             field === "imdb_bewertung" ? value.imdb_bewertung === null : value.laufzeit_minuten === null
           );
         }) as {
-          tmdb_id: number; medientyp: "film" | "serie"; jahr: number | null; poster_url: string | null; overview: string | null;
+          tmdb_id: number; titel: string | null; medientyp: "film" | "serie"; jahr: number | null; poster_url: string | null; overview: string | null;
           land: string; regisseure: string; autoren: string; cast: string; tmdb_bewertung: number | null; tmdb_stimmen: number | null;
           imdb_bewertung: number | null; imdb_stimmen: number | null; laufzeit_minuten: number | null;
         }[];
@@ -463,9 +463,16 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         // node:20 kennt Promise.withResolvers nicht → klassische Form verwenden
         await new Promise((resolve) => setTimeout(resolve, 120));
 
-        if (i % 50 === 0) {
-          res.write(JSON.stringify({ status: "progress", verarbeitet: i, gesamt: rows.length, ergänzt: enriched }) + "\n");
-        }
+        res.write(
+          JSON.stringify({
+            status: "progress",
+            verarbeitet: i,
+            gesamt: rows.length,
+            ergänzt: enriched,
+            aktuell: { tmdb_id: row.tmdb_id, titel: row.titel?.trim() || "Unbekannter Titel" },
+            felder: [...selectedFields],
+          }) + "\n"
+        );
       }
       res.end(
         JSON.stringify({ status: "done", geprüft: rows.length, ergänzt: enriched, fehlgeschlagen: failed, omdb_calls: omdbCalls }) + "\n"
