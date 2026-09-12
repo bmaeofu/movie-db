@@ -64,6 +64,8 @@ OMDb-Free-Tier: **1000 Anfragen/Tag**. Deshalb: Adds mit `?skip_omdb=1` bei Mass
 - Import-Skripte und Snapshot (`.superpowers/sdd/*`) sind gitignorierter Scratch (nicht committen!).
 - Import läuft über `POST /api/collection` mit `source:"kodi"` + Bewertungs-Override + `?skip_omdb=1`.
 
+- **Synchronisationsregel:** Ein movie-db-Eintrag darf ohne Gegenstück in der Kodi-Datenbank existieren, wenn `source != "kodi"` (z. B. manuell/TMDB-kuratiert). Ein Eintrag mit `source = "kodi"` muss dagegen einem aktuell vorhandenen Kodi-Film entsprechen; verwaiste `source="kodi"`-Einträge sind zu prüfen und zu bereinigen.
+
 ## Verifikation
 
 - Backend: `npm test` (aktuell 63 Tests) + `npx tsc -p server/tsconfig.json --noEmit`.
