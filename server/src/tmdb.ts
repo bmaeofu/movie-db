@@ -135,9 +135,17 @@ export function createTmdbClient(options: {
       movie.laufzeit_minuten = typeof runtime === "number" && Number.isInteger(runtime) && runtime > 0 ? runtime : null;
       const credits = (raw.credits ?? {}) as { crew?: any[]; cast?: any[] };
       const cn = await countryNames();
-      movie.land = ((raw.production_countries ?? []) as { iso_3166_1: string; name: string }[])
+      const produktion = ((raw.production_countries ?? []) as { iso_3166_1: string; name: string }[])
         .map((c) => cn.get(c.iso_3166_1) ?? c.name)
         .filter(Boolean);
+      // Ohne Produktionsländer liefert TMDB oft nur origin_country (ISO-Codes)
+      const origin = ((raw.origin_country ?? []) as string[]).map((code) => cn.get(code) ?? code).filter(Boolean);
+      movie.land = produktion.length > 0 ? produktion : Array.from(new Set(origin));
+      // Deutsche Fassung fehlt häufig; dann englische Overview nachziehen
+      if (!movie.overview) {
+        const fallback = await request<{ overview?: unknown }>(path, { append_to_response: "credits", language: "en-US" });
+        if (typeof fallback.overview === "string" && fallback.overview.trim()) movie.overview = fallback.overview;
+      }
       if (medientyp === "film") {
         movie.regisseure = (credits.crew ?? [])
           .filter((c) => c.job === "Director")
