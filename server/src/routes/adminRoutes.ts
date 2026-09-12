@@ -371,7 +371,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     "/enrich",
     asyncHandler(async (req, res) => {
       let aborted = false;
-      req.on("close", () => {
+      res.on("close", () => {
         if (!res.writableEnded) aborted = true;
       });
       const omdbLimitRaw = Number(req.query.omdb_limit);
