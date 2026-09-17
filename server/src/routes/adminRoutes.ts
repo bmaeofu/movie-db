@@ -344,6 +344,56 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
    * Ergänzt fehlende Felder aus TMDB/OMDb (ohne vorhandene Kodi-Werte zu überschreiben).
    * ?omdb_limit=N begrenzt OMDb-Aufrufe/Tag.
    */
+  /**
+   * Meldet Dubletten-Verdachtsfälle: gleiche IMDb-ID (belastbar) sowie gleicher Titel+Jahr (Heuristik).
+   */
+  router.get(
+    "/duplicates",
+    asyncHandler(async (_req, res) => {
+      const rows = db
+        .prepare(
+          `SELECT tmdb_id, titel, jahr, medientyp, source, json_extract(tmdb_json, '$.imdb_id') AS imdb_id
+           FROM movies WHERE tmdb_id > 0 ORDER BY tmdb_id`
+        )
+        .all() as {
+        tmdb_id: number;
+        titel: string;
+        jahr: number | null;
+        medientyp: string;
+        source: string;
+        imdb_id: string | null;
+      }[];
+
+      const nachImdb = new Map<string, typeof rows>();
+      for (const r of rows) {
+        if (!r.imdb_id) continue;
+        const liste = nachImdb.get(r.imdb_id) ?? [];
+        liste.push(r);
+        nachImdb.set(r.imdb_id, liste);
+      }
+
+      const normalisiere = (s: string): string =>
+        s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+      const nachTitel = new Map<string, typeof rows>();
+      for (const r of rows) {
+        if (!r.jahr || normalisiere(r.titel) === "") continue;
+        const key = `${normalisiere(r.titel)}|${r.jahr}`;
+        const liste = nachTitel.get(key) ?? [];
+        liste.push(r);
+        nachTitel.set(key, liste);
+      }
+
+      res.json({
+        imdb_gruppen: [...nachImdb.entries()]
+          .filter(([, liste]) => liste.length > 1)
+          .map(([imdb_id, eintraege]) => ({ imdb_id, eintraege })),
+        titel_jahr_gruppen: [...nachTitel.values()]
+          .filter((liste) => liste.length > 1)
+          .map((eintraege) => ({ titel: eintraege[0].titel, jahr: eintraege[0].jahr, eintraege })),
+      });
+    })
+  );
+
   router.get(
     "/enrich-preview",
     asyncHandler(async (_req, res) => {
@@ -552,6 +602,12 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       const mvCol = db.prepare("UPDATE collection SET tmdb_id = ? WHERE tmdb_id = ?");
       const delCol = db.prepare("DELETE FROM collection WHERE tmdb_id = ?");
       const delMovie = db.prepare("DELETE FROM movies WHERE tmdb_id = ?");
+      // Beim Merge (Ziel existiert): Platzhalter-Titel des Zieleintrags aus dem alten Eintrag füllen
+      const uebernehmeTitel = db.prepare(
+        `UPDATE movies SET titel = (SELECT titel FROM movies WHERE tmdb_id = @alt)
+         WHERE tmdb_id = @neu AND (TRIM(titel) = '' OR titel = 'Unbekannter Titel')
+           AND TRIM((SELECT titel FROM movies WHERE tmdb_id = @alt)) <> ''`
+      );
 
       const results: { alt: number; neu: number; status: string; merge?: boolean }[] = [];
       const apply = db.transaction(() => {
@@ -562,6 +618,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           }
           const merge = Boolean(exists.get(f.neu));
           if (!merge) copyMovie.run({ neu: f.neu, alt: f.alt });
+          else uebernehmeTitel.run({ neu: f.neu, alt: f.alt });
 
           mvRatings.run(f.neu, f.alt);
           delRatings.run(f.alt);

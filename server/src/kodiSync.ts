@@ -144,19 +144,35 @@ export async function fetchKodiActorPhotos(
   }
 }
 
-export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig): Promise<{
-  geprüft: number;
-  importiert: number;
-  übersprungen: number;
-  importierte_filme: { tmdb_id: number; titel: string }[];
-}> {
-  const conn = await mysql.createConnection({
+/** Minimale Kodi-Verbindungsschnittstelle, damit der Sync mit einer Testverbindung läuft. */
+export interface KodiVerbindung {
+  query(sql: string): Promise<[unknown, unknown]>;
+  end(): Promise<void>;
+}
+
+export type KodiVerbinder = (cfg: KodiSyncConfig) => Promise<KodiVerbindung>;
+
+const verbindeKodi: KodiVerbinder = async (cfg) =>
+  mysql.createConnection({
     host: cfg.host,
     port: cfg.port,
     database: cfg.database,
     user: cfg.user,
     password: cfg.password,
-  });
+  }) as unknown as KodiVerbindung;
+
+export async function syncKodiMovies(
+  db: Database.Database,
+  cfg: KodiSyncConfig,
+  verbinder: KodiVerbinder = verbindeKodi
+): Promise<{
+  geprüft: number;
+  importiert: number;
+  übersprungen: number;
+  importierte_filme: { tmdb_id: number; titel: string }[];
+  dubletten: { imdb_id: string; vorhandene_tmdb_id: number; kodi_tmdb_id: number; titel: string }[];
+}> {
+  const conn = await verbinder(cfg);
 
   try {
     const [movieRows] = await conn.query(`
@@ -227,6 +243,16 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
       "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users"
     );
 
+    // Bekannte IMDb-IDs: erkennt Filme, die unter einer anderen TMDB-ID schon in der Sammlung liegen
+    const imdbZuTmdb = new Map<string, number>();
+    const bekannt = db
+      .prepare(
+        `SELECT tmdb_id, json_extract(tmdb_json, '$.imdb_id') AS imdb_id FROM movies
+         WHERE tmdb_id > 0 AND json_extract(tmdb_json, '$.imdb_id') IS NOT NULL`
+      )
+      .all() as { tmdb_id: number; imdb_id: string | null }[];
+    for (const b of bekannt) if (b.imdb_id) imdbZuTmdb.set(b.imdb_id, b.tmdb_id);
+
     // added_by: erster Admin (Fallback 0)
     const admin = (db.prepare("SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1").get() as
       | { id: number }
@@ -234,6 +260,7 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
 
     let importiert = 0;
     const importierteFilme: { tmdb_id: number; titel: string }[] = [];
+    const dubletten: { imdb_id: string; vorhandene_tmdb_id: number; kodi_tmdb_id: number; titel: string }[] = [];
     let übersprungen = 0;
     const apply = db.transaction(() => {
       for (const row of movieRows) {
@@ -242,6 +269,21 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
         if (inCollection.get(tmdbId)) {
           übersprungen++;
           continue;
+        }
+        // Gleicher Film unter anderer TMDB-ID (Kodi-Rescrape) → nicht doppelt anlegen
+        const imdbId = row.imdb_id?.trim();
+        if (imdbId) {
+          const vorhandene = imdbZuTmdb.get(imdbId);
+          if (vorhandene !== undefined && vorhandene !== tmdbId) {
+            dubletten.push({
+              imdb_id: imdbId,
+              vorhandene_tmdb_id: vorhandene,
+              kodi_tmdb_id: tmdbId,
+              titel: row.titel?.trim() || "",
+            });
+            übersprungen++;
+            continue;
+          }
         }
         const jahrRaw = Number(row.jahr);
         const jahr = Number.isInteger(jahrRaw) && jahrRaw >= 1888 && jahrRaw <= 2100 ? jahrRaw : null;
@@ -272,7 +314,7 @@ export async function syncKodiMovies(db: Database.Database, cfg: KodiSyncConfig)
       }
     });
     apply();
-    return { geprüft: movieRows.length, importiert, übersprungen, importierte_filme: importierteFilme };
+    return { geprüft: movieRows.length, importiert, übersprungen, importierte_filme: importierteFilme, dubletten };
   } finally {
     await conn.end();
   }

@@ -104,6 +104,67 @@ describe("Admin-Backfill", () => {
     expect(row.imdb_bewertung).toBeNull();
   });
 
+  it("dubletten: meldet gleiche IMDb-ID und gleichen Titel+Jahr, nur für Admins", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
+       VALUES (?, ?, ?, 'film', '[]', NULL, 'Plot', ?, '[]', '[]', '[]', '[]')`
+    );
+    einfuegen.run(9001, "Es", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
+    einfuegen.run(9002, "Es (Neuscan)", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
+    einfuegen.run(9003, "Einzelstück", 2001, JSON.stringify({ imdb_id: "tt9999999" }));
+    einfuegen.run(9004, "Doppelter Titel", 2004, JSON.stringify({}));
+    einfuegen.run(9005, "Doppelter Titel", 2004, JSON.stringify({}));
+
+    expect((await request(app).get("/api/admin/duplicates").set("Cookie", benCookie)).status).toBe(403);
+
+    const res = await request(app).get("/api/admin/duplicates").set("Cookie", adminCookie);
+    expect(res.status).toBe(200);
+    const imdbGruppe = res.body.imdb_gruppen.find((g: any) => g.imdb_id === "tt0059153");
+    expect(imdbGruppe.eintraege.map((e: any) => e.tmdb_id).sort()).toEqual([9001, 9002]);
+    expect(res.body.imdb_gruppen.every((g: any) => g.eintraege.length > 1)).toBe(true);
+
+    const titelGruppe = res.body.titel_jahr_gruppen.find((g: any) => g.titel === "Doppelter Titel");
+    expect(titelGruppe.jahr).toBe(2004);
+    expect(titelGruppe.eintraege.map((e: any) => e.tmdb_id).sort()).toEqual([9004, 9005]);
+  });
+
+  it("fix-tmdb-ids: Merge übernimmt Platzhalter-Titel des alten Eintrags", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
+       VALUES (?, ?, 1966, 'film', '[]', NULL, 'Plot', ?, '[]', '[]', '[]', '[]')`
+    );
+    einfuegen.run(9101, "Es", JSON.stringify({ imdb_id: "tt0059153" }));
+    einfuegen.run(9102, "Unbekannter Titel", JSON.stringify({ imdb_id: "tt0059153" }));
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9101, 1)").run();
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9102, 1)").run();
+
+    const res = await request(app)
+      .post("/api/admin/fix-tmdb-ids")
+      .set("Cookie", adminCookie)
+      .send({ fixes: [{ alt: 9101, neu: 9102 }] });
+    expect(res.status).toBe(200);
+    expect(res.body.fixes[0]).toMatchObject({ alt: 9101, neu: 9102, status: "ok", merge: true });
+
+    const ueberlebt = db.prepare("SELECT titel FROM movies WHERE tmdb_id = 9102").get() as { titel: string };
+    expect(ueberlebt.titel).toBe("Es");
+    expect(db.prepare("SELECT COUNT(*) n FROM movies WHERE tmdb_id = 9101").get()).toEqual({ n: 0 });
+  });
+
+  it("fix-tmdb-ids: Merge überschreibt einen vorhandenen echten Titel nicht", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
+       VALUES (?, ?, 1966, 'film', '[]', NULL, 'Plot', ?, '[]', '[]', '[]', '[]')`
+    );
+    einfuegen.run(9201, "Alter Titel", JSON.stringify({ imdb_id: "tt111" }));
+    einfuegen.run(9202, "Richtiger Titel", JSON.stringify({ imdb_id: "tt111" }));
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9201, 1)").run();
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9202, 1)").run();
+
+    await request(app).post("/api/admin/fix-tmdb-ids").set("Cookie", adminCookie).send({ fixes: [{ alt: 9201, neu: 9202 }] });
+    const ueberlebt = db.prepare("SELECT titel FROM movies WHERE tmdb_id = 9202").get() as { titel: string };
+    expect(ueberlebt.titel).toBe("Richtiger Titel");
+  });
+
   it("actors-Import: UPSERT und Validierung", async () => {
     const ok = await request(app)
       .post("/api/admin/actors")
