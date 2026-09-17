@@ -19,6 +19,19 @@ export interface EnrichPreview {
 
 export type EnrichField = "jahr" | "poster" | "overview" | "land" | "regisseure" | "autoren" | "cast" | "imdb_bewertung" | "laufzeit";
 
+/** Anzeigenamen der Enrich-Felder; identisch zur Feldauswahl im Backend. */
+export const ENRICH_FELD_LABELS: Record<EnrichField, string> = {
+  jahr: "Jahr",
+  poster: "Poster",
+  overview: "Plot",
+  land: "Land",
+  regisseure: "Regie",
+  autoren: "Autoren",
+  cast: "Cast",
+  imdb_bewertung: "IMDb-Bewertung",
+  laufzeit: "Laufzeit",
+};
+
 export interface SearchResult {
   tmdb_id: number;
   titel: string;

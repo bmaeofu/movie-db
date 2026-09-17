@@ -8,6 +8,19 @@ import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
 import { fetchKodiActorPhotos, fetchKodiPosters, type KodiSyncConfig } from "../kodiSync.js";
 
+/** fehlt=… → SQL-Bedingung je Feldname (identisch zu den Enrich-Feldern). */
+const FEHLT_SQL: Record<string, string> = {
+  jahr: "m.jahr IS NULL",
+  poster: "m.poster_url IS NULL",
+  overview: "m.overview IS NULL",
+  land: "m.land = '[]'",
+  regisseure: "m.regisseure = '[]'",
+  autoren: "m.autoren = '[]'",
+  cast: `m."cast" = '[]'`,
+  imdb_bewertung: "m.imdb_bewertung IS NULL",
+  laufzeit: "m.laufzeit_minuten IS NULL",
+};
+
 function buildFilter(query: Record<string, unknown>): { where: string[]; params: Record<string, unknown> } {
   const q = typeof query.q === "string" ? query.q.trim() : "";
   const text = typeof query.text === "string" ? query.text.trim() : "";
@@ -25,6 +38,7 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const runtimeMax = Number(query.runtime_max);
   const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
   const status = typeof query.status === "string" ? query.status : "";
+  const fehltParam = typeof query.fehlt === "string" ? query.fehlt.trim() : "";
 
   const where: string[] = [];
   const params: Record<string, unknown> = {};
@@ -94,6 +108,14 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   if (status) {
     where.push("ws.status = @status");
     params.status = status;
+  }
+  // fehlt=jahr,overview → Filme, denen mindestens eines der Felder fehlt (wie die Enrich-Auswahl)
+  if (fehltParam) {
+    const fehlend = fehltParam
+      .split(",")
+      .map((feld) => FEHLT_SQL[feld.trim()])
+      .filter((bedingung): bedingung is string => Boolean(bedingung));
+    if (fehlend.length > 0) where.push(`(${fehlend.join(" OR ")})`);
   }
   return { where, params };
 }

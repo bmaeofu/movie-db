@@ -244,6 +244,34 @@ describe("Sammlung", () => {
     expect(facets.body.schauspieler).toContain("Leonardo DiCaprio");
   });
 
+  it("filtert nach fehlenden Feldern (fehlt=…, ODER-Verknüpfung)", async () => {
+    // 27205 vollständig, 157336 ohne Jahr/Plot/Land, 1399 ohne Land
+    db.prepare(`UPDATE movies SET land = '["USA"]' WHERE tmdb_id = 27205`).run();
+    db.prepare(`UPDATE movies SET jahr = NULL, overview = NULL, land = '[]' WHERE tmdb_id = 157336`).run();
+
+    const jahr = await request(app).get("/api/collection?fehlt=jahr").set("Cookie", annaCookie);
+    expect(jahr.body.map((m: any) => m.tmdb_id).sort()).toEqual([157336]);
+
+    const land = await request(app).get("/api/collection?fehlt=land").set("Cookie", annaCookie);
+    expect(land.body.map((m: any) => m.tmdb_id).sort()).toEqual([1399, 157336]);
+
+    // ODER: mindestens eines der Felder fehlt
+    const beides = await request(app).get("/api/collection?fehlt=jahr,land").set("Cookie", annaCookie);
+    expect(beides.body.map((m: any) => m.tmdb_id).sort()).toEqual([1399, 157336]);
+
+    // kombinierbar mit anderen Filtern
+    const kombi = await request(app).get("/api/collection?fehlt=jahr&medientyp=film").set("Cookie", annaCookie);
+    expect(kombi.body.map((m: any) => m.tmdb_id).sort()).toEqual([157336]);
+
+    // count nutzt denselben Filter
+    const count = await request(app).get("/api/collection/count?fehlt=jahr").set("Cookie", annaCookie);
+    expect(count.body.count).toBe(1);
+
+    // unbekannte Werte werden ignoriert
+    const ungueltig = await request(app).get("/api/collection?fehlt=quatsch").set("Cookie", annaCookie);
+    expect(ungueltig.body.map((m: any) => m.tmdb_id).sort()).toEqual([1399, 157336, 27205]);
+  });
+
   it("sortiert nach Bewertung absteigend", async () => {
     await request(app).put("/api/movies/27205/rating").set("Cookie", annaCookie).send({ sterne: 5 });
     await request(app).put("/api/movies/157336/rating").set("Cookie", annaCookie).send({ sterne: 3 });

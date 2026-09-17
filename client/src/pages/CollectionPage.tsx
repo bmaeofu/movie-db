@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Movie } from "../api";
+import { useSearchParams } from "react-router-dom";
+import { api, ENRICH_FELD_LABELS, type EnrichField, type Movie } from "../api";
 import MovieCard from "../components/MovieCard";
 import SearchModal from "../components/SearchModal";
 import MovieDetailModal from "../components/MovieDetailModal";
@@ -33,6 +34,9 @@ export default function CollectionPage() {
   const [detail, setDetail] = useState<Movie | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fehlt = searchParams.get("fehlt") ?? "";
+  const fehltFelder = fehlt.split(",").filter((f): f is EnrichField => f in ENRICH_FELD_LABELS);
 
   const SORT_LABELS: Record<string, string> = {
     zuletzt_hinzugefuegt: "Zuletzt hinzugefügt",
@@ -68,6 +72,7 @@ export default function CollectionPage() {
     else if (laufzeit === ">150") filters.runtime_min = "150";
     if (medientyp) filters.medientyp = medientyp;
     if (status) filters.status = status;
+    if (fehlt) filters.fehlt = fehlt;
     const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
     setMovies(fresh);
     setCount(c.count);
@@ -78,7 +83,7 @@ export default function CollectionPage() {
     } else {
       setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
     }
-  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort, pendingOpen]);
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort, pendingOpen, fehlt]);
 
   useEffect(() => {
     void load();
@@ -95,6 +100,11 @@ export default function CollectionPage() {
   const genres = [...new Set(movies.flatMap((m) => m.genres))].sort();
 
   function resetFilters() {
+    if (fehlt) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("fehlt");
+      setSearchParams(next, { replace: true });
+    }
     setQ("");
     setText("");
     setGenre("");
@@ -136,6 +146,7 @@ export default function CollectionPage() {
   }
 
   const hasFilter =
+    fehlt !== "" ||
     q !== "" ||
     text !== "" ||
     genre !== "" ||
@@ -283,6 +294,21 @@ export default function CollectionPage() {
 
       <p className="stat">
         {count ?? "–"} von {total ?? "–"} Filmen · Sortierung: {SORT_LABELS[sort] ?? sort}
+        {fehltFelder.length > 0 && (
+          <span className="status-badge" style={{ marginLeft: "0.5rem" }}>
+            Fehlt: {fehltFelder.map((f) => ENRICH_FELD_LABELS[f]).join(", ")}{" "}
+            <button
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("fehlt");
+                setSearchParams(next, { replace: true });
+              }}
+              aria-label="Filter „fehlende Felder“ entfernen"
+            >
+              ×
+            </button>
+          </span>
+        )}
       </p>
 
       {movies.length === 0 ? (
