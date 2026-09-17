@@ -5,10 +5,11 @@ import { syncKodiMovies, type KodiSyncConfig, type KodiVerbindung } from "../src
 
 const cfg: KodiSyncConfig = { host: "h", port: 3306, database: "d", user: "u", password: "p" };
 
-function kodiZeile(tmdbId: number, titel: string, imdbId: string | null): Record<string, unknown> {
+function kodiZeile(tmdbId: number, titel: string, imdbId: string | null, datei: string | null = "Film.mkv"): Record<string, unknown> {
   return {
     tmdb_id: String(tmdbId),
     titel,
+    datei,
     jahr: "1999",
     laufzeit: 100,
     overview: "Plot",
@@ -94,6 +95,18 @@ describe("Kodi-Sync", () => {
     const ergebnis = await syncKodiMovies(db, cfg, async () => fakeVerbindung([kodiZeile(999, "Die Rückkehr", "tt0376968")]));
     expect(ergebnis.importiert).toBe(1);
     expect(ergebnis.dubletten).toEqual([]);
+  });
+
+  it("nimmt den Dateinamen, wenn Kodi keinen Titel liefert", async () => {
+    const ergebnis = await syncKodiMovies(db, cfg, async () =>
+      fakeVerbindung([kodiZeile(601, "", null, "Eine fremde Tochter.mkv"), kodiZeile(602, "   ", null, "Rückkehr nach Rimini.mkv")])
+    );
+    expect(ergebnis.importiert).toBe(2);
+    const titel = db.prepare("SELECT tmdb_id, titel FROM movies ORDER BY tmdb_id").all() as { tmdb_id: number; titel: string }[];
+    expect(titel).toEqual([
+      { tmdb_id: 601, titel: "Eine fremde Tochter" },
+      { tmdb_id: 602, titel: "Rückkehr nach Rimini" },
+    ]);
   });
 
   it("überspringt Kodi-Filme ohne IMDb-ID nicht fälschlich", async () => {

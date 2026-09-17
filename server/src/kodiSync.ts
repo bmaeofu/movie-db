@@ -25,6 +25,7 @@ interface KodiMovieRow {
   tmdb_stimmen: number | null;
   imdb_id: string | null;
   poster: string | null;
+  datei: string | null;
 }
 
 interface KodiCastRow {
@@ -34,6 +35,14 @@ interface KodiCastRow {
 }
 
 const SMB_PREFIX = "smb://UMS/media/tv/FilmeHD";
+
+/** Kodis Titelfeld ist bei manchen Filmen leer; dann den Dateinamen ohne Endung verwenden. */
+function kodiTitel(titel: string | null, datei: string | null): string {
+  const ausKodi = titel?.trim();
+  if (ausKodi) return ausKodi;
+  const ausDatei = datei?.replace(/\.[^.]+$/, "").trim();
+  return ausDatei || "Unbekannter Titel";
+}
 
 function splitList(value: string | null): string[] {
   if (!value) return [];
@@ -198,11 +207,13 @@ export async function syncKodiMovies(
         (SELECT value FROM uniqueid
           WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'imdb' LIMIT 1) AS imdb_id,
         (SELECT url FROM art
-          WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'poster' LIMIT 1) AS poster
+          WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'poster' LIMIT 1) AS poster,
+        f.strFilename AS datei
       FROM movie m
       JOIN uniqueid u
         ON u.media_id = m.idMovie AND u.media_type = 'movie'
        AND u.type = 'tmdb' AND u.value REGEXP '^[0-9]+$'
+      LEFT JOIN files f ON f.idFile = m.idFile
     `) as [KodiMovieRow[], unknown];
 
     const [castRows] = await conn.query(`
@@ -289,9 +300,10 @@ export async function syncKodiMovies(
         const jahrRaw = Number(row.jahr);
         const jahr = Number.isInteger(jahrRaw) && jahrRaw >= 1888 && jahrRaw <= 2100 ? jahrRaw : null;
         const laufzeit = row.laufzeit !== null && Number.isInteger(row.laufzeit) && row.laufzeit > 0 ? row.laufzeit : null;
+        const titelDesFilms = kodiTitel(row.titel, row.datei);
         upsert.run({
           tmdb_id: tmdbId,
-          titel: row.titel?.trim() || "Unbekannter Titel",
+          titel: titelDesFilms,
           jahr,
           medientyp: "film",
           genres: JSON.stringify(splitList(row.genres)),
@@ -310,7 +322,7 @@ export async function syncKodiMovies(
         });
         addCollection.run(tmdbId, admin);
         markNeu.run(tmdbId);
-        importierteFilme.push({ tmdb_id: tmdbId, titel: row.titel?.trim() || "Unbekannter Titel" });
+        importierteFilme.push({ tmdb_id: tmdbId, titel: titelDesFilms });
         importiert++;
       }
     });

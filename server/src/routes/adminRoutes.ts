@@ -6,8 +6,12 @@ import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
 import { fetchKodiActorPhotos, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 
-const ENRICH_LOG = "/data/logs/enrich.log";
-function logEnrich(event: Record<string, unknown>): void {
+/** Titel, die kein echter Filmtitel sind: leer oder der Kodi-Import-Platzhalter. */
+function istPlatzhalterTitel(titel: string | null): boolean {
+  return !titel?.trim() || titel.trim() === "Unbekannter Titel";
+}
+
+const ENRICH_LOG = "/data/logs/enrich.log";function logEnrich(event: Record<string, unknown>): void {
   mkdirSync("/data/logs", { recursive: true });
   appendFileSync(ENRICH_LOG, JSON.stringify({ zeit: new Date().toISOString(), ...event }) + "\n", "utf8");
 }
@@ -440,10 +444,10 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         .all()
         .filter((row) => {
           const value = row as {
-            jahr: number | null; poster_url: string | null; overview: string | null; land: string;
+            titel: string | null; jahr: number | null; poster_url: string | null; overview: string | null; land: string;
             regisseure: string; autoren: string; cast: string; imdb_bewertung: number | null; laufzeit_minuten: number | null;
           };
-          return [...selectedFields].some((field) =>
+          return istPlatzhalterTitel(value.titel) || [...selectedFields].some((field) =>
             field === "jahr" ? value.jahr === null :
             field === "poster" ? value.poster_url === null :
             field === "overview" ? value.overview === null :
@@ -463,7 +467,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       const update = db.prepare(
         `UPDATE movies SET jahr = ?, poster_url = ?, overview = ?, land = ?, regisseure = ?, autoren = ?, "cast" = ?,
                           tmdb_bewertung = ?, tmdb_stimmen = ?, imdb_bewertung = ?, imdb_stimmen = ?, laufzeit_minuten = ?,
-                          zuletzt_aktualisiert = datetime('now')
+                          titel = ?, zuletzt_aktualisiert = datetime('now')
          WHERE tmdb_id = ?`
       );
 
@@ -484,6 +488,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           const m = await tmdb.details(row.tmdb_id, row.medientyp);
 
           const jahr = selectedFields.has("jahr") ? row.jahr ?? m.jahr : row.jahr;
+          const titel = istPlatzhalterTitel(row.titel) ? m.titel?.trim() || row.titel : row.titel;
           const poster_url = selectedFields.has("poster") ? row.poster_url ?? m.poster_url : row.poster_url;
           const overview = selectedFields.has("overview") ? row.overview ?? m.overview : row.overview;
           const land = selectedFields.has("land") && row.land === "[]" ? JSON.stringify(m.land) : row.land;
@@ -518,6 +523,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             imdb_bewertung,
             imdb_stimmen,
             laufzeit_minuten,
+            titel,
             row.tmdb_id
           );
           enriched++;

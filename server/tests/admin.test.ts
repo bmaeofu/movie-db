@@ -171,6 +171,38 @@ describe("Admin-Backfill", () => {
     expect(ueberlebt.titel).toBe("Richtiger Titel");
   });
 
+  it("enrich: ersetzt Platzhaltertitel durch den TMDB-Titel", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                           land, regisseure, autoren, "cast", imdb_bewertung, laufzeit_minuten)
+       VALUES (?, ?, 2022, 'film', '[]', 'https://bild', 'Plot', '{}',
+               '["Deutschland"]', '["Regie"]', '["Autor"]', '[{"name":"N","rolle":"R"}]', 7.0, 90)`
+    );
+    einfuegen.run(9100, "Unbekannter Titel");
+    einfuegen.run(9101, "Echter Titel");
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9100, 1)").run();
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9101, 1)").run();
+
+    const res = await request(app)
+      .post("/api/admin/enrich")
+      .set("Cookie", adminCookie)
+      .send({ fields: ["jahr"] })
+      .buffer(true)
+      .parse((response, callback) => {
+        let text = "";
+        response.on("data", (chunk: Buffer) => {
+          text += chunk.toString();
+        });
+        response.on("end", () => callback(null, text));
+      });
+    expect(res.status).toBe(200);
+
+    const platzhalter = db.prepare("SELECT titel FROM movies WHERE tmdb_id = 9100").get() as { titel: string };
+    expect(platzhalter.titel).toBe("Testfilm");
+    const echt = db.prepare("SELECT titel FROM movies WHERE tmdb_id = 9101").get() as { titel: string };
+    expect(echt.titel).toBe("Echter Titel");
+  });
+
   it("actors-Import: UPSERT und Validierung", async () => {
     const ok = await request(app)
       .post("/api/admin/actors")
