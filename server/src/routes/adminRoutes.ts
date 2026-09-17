@@ -352,8 +352,10 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     asyncHandler(async (_req, res) => {
       const rows = db
         .prepare(
-          `SELECT tmdb_id, titel, jahr, medientyp, source, json_extract(tmdb_json, '$.imdb_id') AS imdb_id
-           FROM movies WHERE tmdb_id > 0 ORDER BY tmdb_id`
+          `SELECT m.tmdb_id, m.titel, m.jahr, m.medientyp, m.source,
+                  json_extract(m.tmdb_json, '$.imdb_id') AS imdb_id
+           FROM movies m JOIN collection c ON c.tmdb_id = m.tmdb_id
+           WHERE m.tmdb_id > 0 ORDER BY m.tmdb_id`
         )
         .all() as {
         tmdb_id: number;

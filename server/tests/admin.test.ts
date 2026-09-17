@@ -109,11 +109,16 @@ describe("Admin-Backfill", () => {
       `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
        VALUES (?, ?, ?, 'film', '[]', NULL, 'Plot', ?, '[]', '[]', '[]', '[]')`
     );
+    const inSammlung = db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, 1)");
     einfuegen.run(9001, "Es", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
     einfuegen.run(9002, "Es (Neuscan)", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
     einfuegen.run(9003, "Einzelstück", 2001, JSON.stringify({ imdb_id: "tt9999999" }));
     einfuegen.run(9004, "Doppelter Titel", 2004, JSON.stringify({}));
     einfuegen.run(9005, "Doppelter Titel", 2004, JSON.stringify({}));
+    // Restzeilen ohne Sammlungseintrag dürfen nicht als Dublette erscheinen
+    einfuegen.run(9006, "Es (Restzeile)", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
+    einfuegen.run(9007, "Es (Restzeile 2)", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
+    for (const id of [9001, 9002, 9003, 9004, 9005]) inSammlung.run(id);
 
     expect((await request(app).get("/api/admin/duplicates").set("Cookie", benCookie)).status).toBe(403);
 
@@ -122,6 +127,7 @@ describe("Admin-Backfill", () => {
     const imdbGruppe = res.body.imdb_gruppen.find((g: any) => g.imdb_id === "tt0059153");
     expect(imdbGruppe.eintraege.map((e: any) => e.tmdb_id).sort()).toEqual([9001, 9002]);
     expect(res.body.imdb_gruppen.every((g: any) => g.eintraege.length > 1)).toBe(true);
+    expect(res.body.imdb_gruppen.every((g: any) => g.eintraege.every((e: any) => e.tmdb_id !== 9006 && e.tmdb_id !== 9007))).toBe(true);
 
     const titelGruppe = res.body.titel_jahr_gruppen.find((g: any) => g.titel === "Doppelter Titel");
     expect(titelGruppe.jahr).toBe(2004);

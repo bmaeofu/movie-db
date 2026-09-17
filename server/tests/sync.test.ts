@@ -85,6 +85,17 @@ describe("Kodi-Sync", () => {
     expect(ergebnis.importierte_filme.map((f) => f.tmdb_id)).toEqual([1, 2]);
   });
 
+  it("überspringt nicht, wenn die IMDb-ID nur an einer Zeile außerhalb der Sammlung hängt", async () => {
+    db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
+       VALUES (11190, 'The Return - Die Rückkehr', 2003, 'film', '[]', NULL, 'Plot', ?, '[]', '[]', '[]', '[]')`
+    ).run(JSON.stringify({ imdb_id: "tt0376968" }));
+
+    const ergebnis = await syncKodiMovies(db, cfg, async () => fakeVerbindung([kodiZeile(999, "Die Rückkehr", "tt0376968")]));
+    expect(ergebnis.importiert).toBe(1);
+    expect(ergebnis.dubletten).toEqual([]);
+  });
+
   it("überspringt Kodi-Filme ohne IMDb-ID nicht fälschlich", async () => {
     bekanntenFilmAnlegen(115982, "Es", "tt0059153");
     const ergebnis = await syncKodiMovies(db, cfg, async () => fakeVerbindung([kodiZeile(777, "Ohne IMDb", null)]));

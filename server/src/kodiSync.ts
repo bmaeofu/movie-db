@@ -247,8 +247,9 @@ export async function syncKodiMovies(
     const imdbZuTmdb = new Map<string, number>();
     const bekannt = db
       .prepare(
-        `SELECT tmdb_id, json_extract(tmdb_json, '$.imdb_id') AS imdb_id FROM movies
-         WHERE tmdb_id > 0 AND json_extract(tmdb_json, '$.imdb_id') IS NOT NULL`
+        `SELECT m.tmdb_id, json_extract(m.tmdb_json, '$.imdb_id') AS imdb_id
+         FROM movies m JOIN collection c ON c.tmdb_id = m.tmdb_id
+         WHERE m.tmdb_id > 0 AND json_extract(m.tmdb_json, '$.imdb_id') IS NOT NULL`
       )
       .all() as { tmdb_id: number; imdb_id: string | null }[];
     for (const b of bekannt) if (b.imdb_id) imdbZuTmdb.set(b.imdb_id, b.tmdb_id);
