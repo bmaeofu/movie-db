@@ -49,7 +49,10 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
       }
       next();
     },
-    express.static(mediaDir)
+    express.static(mediaDir),
+    (_req: Request, res: Response) => {
+      res.status(404).json({ error: "Nicht gefunden" });
+    }
   );
 
   app.use("/api", (_req, res) => {

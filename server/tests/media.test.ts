@@ -66,4 +66,10 @@ describe("Medien-Dateien", () => {
     const res = await request(app).get("/media/FilmeHD3/Film.mkv").set("Cookie", cookie);
     expect(res.status).toBe(404);
   });
+
+  it("antwortet bei fehlender Datei mit 404 statt mit der SPA", async () => {
+    const res = await request(app).get("/media/FilmeHD3/GibtsNicht.jpg").set("Cookie", cookie);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Nicht gefunden" });
+  });
 });
