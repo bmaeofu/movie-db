@@ -11,7 +11,7 @@ Gemeinsame Filmdatenbank für Familie/Freunde im Heimnetz: kuratierte Sammlung (
 ## Kern-Konventionen
 
 - **UI- und Fehlertexte auf Deutsch** (API-Fehler immer JSON `{ "error": string }`; Erfolg ohne Body → 204).
-- **Commit-Messages auf Deutsch**, Konvention aus den letzten Commits: `feat:`, `fix:`, `test:`, `docs:`, `build:`, `chore:`.
+- **Commit messages in English**, convention from recent commits: `feat:`, `fix:`, `test:`, `docs:`, `build:`, `chore:`.
 - **TDD:** Tests zuerst (`npm run test -w server`), dann Implementierung. Neuer Code ohne `any` und ohne Inline-Casts (`as { … }` direkt am Zugriff) – Projekt-Regeln (ts-no-any, ts-no-inline-cast-access, ts-set-map) gelten verbindlich.
 - **Git-Identity** (lokal nicht global gesetzt): `git -c user.name="omp" -c user.email="omp@local" commit -m "…"`.
 
