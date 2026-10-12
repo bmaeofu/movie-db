@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db.js";
-import { syncKodiMovies, type KodiSyncConfig, type KodiVerbindung } from "../src/kodiSync.js";
+import { posterUrl, syncKodiMovies, type KodiSyncConfig, type KodiVerbindung } from "../src/kodiSync.js";
 
 const cfg: KodiSyncConfig = { host: "h", port: 3306, database: "d", user: "u", password: "p" };
 
@@ -38,6 +38,15 @@ function fakeVerbindung(movieRows: Record<string, unknown>[], castRows: Record<s
 
 describe("Kodi-Sync", () => {
   let db: Database.Database;
+
+  it("bildet Kodi-Posterpfade auf /media ab (mehrere Ordner und Hosts)", () => {
+    expect(posterUrl("smb://UMS/media/tv/FilmeHD3/Bild.jpg")).toBe("/media/FilmeHD3/Bild.jpg");
+    expect(posterUrl("smb://UMS/media/tv/KrimiHD/Uhrwerk Orange-poster.jpg")).toBe("/media/KrimiHD/Uhrwerk Orange-poster.jpg");
+    expect(posterUrl("smb://192.168.178.75/media/tv/DokHD/Bild.jpg")).toBe("/media/DokHD/Bild.jpg");
+    expect(posterUrl("smb://192.168.178.60/media/tv/FilmeHD/Bild.jpg")).toBeNull();
+    expect(posterUrl("https://image.tmdb.org/t/p/w342/x.jpg")).toBeNull();
+    expect(posterUrl(null)).toBeNull();
+  });
 
   beforeEach(() => {
     db = createDb(":memory:");

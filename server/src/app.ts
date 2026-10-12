@@ -7,6 +7,7 @@ import { createAuthRouter } from "./routes/authRoutes.js";
 import { createUserRouter } from "./routes/userRoutes.js";
 import { createAdminRouter } from "./routes/adminRoutes.js";
 import type { OmdbClient } from "./omdb.js";
+import { requireAuth } from "./middleware.js";
 import { createSearchRouter } from "./routes/searchRoutes.js";
 import { createCollectionRouter } from "./routes/collectionRoutes.js";
 import { createMovieRouter } from "./routes/movieRoutes.js";
@@ -34,8 +35,22 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   app.use("/api/movies", createMovieRouter(db));
   app.use("/api/lists", createListRouter(db));
   app.use("/api/actors", createActorRouter(db, mediaDir));
-  // Lokale Kodi-Poster (smb-Pfad → /media/…) aus dem gemounteten Medien-Ordner
-  app.use("/media", express.static(mediaDir));
+  // Lokale Kodi-Poster (smb-Pfad → /media/…) aus dem gemounteten Medien-Ordner.
+  // Nur mit Sitzung und nur Bilddateien – der Mount kann die gesamte Medienablage umfassen.
+  const BILD_ENDUNGEN = new Set([".jpg", ".jpeg", ".png", ".webp", ".tbn"]);
+  app.use(
+    "/media",
+    requireAuth(db),
+    (req: Request, res: Response, next: NextFunction) => {
+      const endung = path.extname(decodeURIComponent(req.path)).toLowerCase();
+      if (!BILD_ENDUNGEN.has(endung)) {
+        res.status(404).json({ error: "Nicht gefunden" });
+        return;
+      }
+      next();
+    },
+    express.static(mediaDir)
+  );
 
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Unbekannter API-Endpunkt" });

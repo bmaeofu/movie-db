@@ -34,7 +34,8 @@ interface KodiCastRow {
   rolle: string | null;
 }
 
-const SMB_PREFIX = "smb://UMS/media/tv/FilmeHD";
+/** Kodi-Medienwurzeln, die im Container unter /media eingebunden sind (Host-Namen und IP-Schreibweise). */
+const SMB_WURZELN = ["smb://UMS/media/tv/", "smb://192.168.178.75/media/tv/"];
 
 /** Kodis Titelfeld ist bei manchen Filmen leer; dann den Dateinamen ohne Endung verwenden. */
 function kodiTitel(titel: string | null, datei: string | null): string {
@@ -52,11 +53,15 @@ function splitList(value: string | null): string[] {
     .filter(Boolean);
 }
 
-/** Kodi-SMB-Posterpfad → vom Frontend ladbarer /media-Pfad (nur im gemounteten Ordner). */
+/** Kodi-SMB-Pfad → vom Frontend ladbarer /media-Pfad (nur innerhalb der eingebundenen Wurzeln). */
 export function posterUrl(smb: string | null): string | null {
-  if (!smb || !smb.startsWith(SMB_PREFIX)) return null;
-  const rel = smb.slice(SMB_PREFIX.length);
-  return rel ? "/media" + rel : null;
+  if (!smb) return null;
+  for (const wurzel of SMB_WURZELN) {
+    if (!smb.startsWith(wurzel)) continue;
+    const rel = smb.slice(wurzel.length);
+    return rel ? "/media/" + rel : null;
+  }
+  return null;
 }
 
 /**
@@ -136,14 +141,12 @@ export async function fetchKodiActorPhotos(
       const name = String(r.name ?? "").trim();
       if (!name) continue;
       const url = String(r.url ?? "");
-      let bild: string | null = null;
-      if (url.startsWith(SMB_PREFIX)) {
-        bild = "/media" + url.slice(SMB_PREFIX.length);
-      } else if (url.startsWith("http://") || url.startsWith("https://")) {
+      const lokal = posterUrl(url);
+      let bild: string | null = lokal;
+      if (!bild && (url.startsWith("http://") || url.startsWith("https://"))) {
         bild = url;
-      } else {
-        continue;
       }
+      if (!bild) continue;
       const cur = byName.get(name);
       if (!cur || (cur.startsWith("http") && bild.startsWith("/media"))) byName.set(name, bild);
     }
