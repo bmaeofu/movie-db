@@ -72,7 +72,7 @@ export default function AdminEnrichPanel() {
   }
 
   return (
-    <section className="admin-enrich">
+    <section className="admin-panel">
       <h2>Daten ergänzen</h2>
       <p>Aktuelle Lücken:</p>
       {preview ? (

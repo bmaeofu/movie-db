@@ -143,3 +143,16 @@ input, select, textarea {
 .list-row .actions { display: flex; gap: 0.4rem; }
 .list-name { border: none; background: none; font-size: 1.05rem; padding: 0; }
 .list-name:hover { color: var(--accent); }
+
+/* Admin-Bereiche (Daten ergänzen, Wartung) */
+.admin-panel {
+  background: var(--card); border: 1px solid #33404b; border-radius: 8px;
+  padding: 0.9rem 1.1rem; margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.6rem;
+}
+.admin-panel h2 { margin: 0; font-size: 1.05rem; }
+.admin-panel p { margin: 0; }
+.admin-aktionen { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.admin-meldung { color: var(--muted); font-size: 0.9rem; white-space: pre-line; }
+.enrich-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.3rem 0.8rem; }
+.enrich-stats label { display: flex; gap: 0.4rem; align-items: center; }
+.enrich-filter { display: flex; gap: 0.4rem; align-items: center; }

@@ -80,6 +80,68 @@ export interface UserSummary extends User {
   created_at: string;
 }
 
+export interface DuplikatEintrag {
+  tmdb_id: number;
+  titel: string;
+  jahr: number | null;
+  medientyp: string;
+  source: string;
+  imdb_id: string | null;
+}
+
+export interface DuplikatBericht {
+  imdb_gruppen: { imdb_id: string; eintraege: DuplikatEintrag[] }[];
+  titel_jahr_gruppen: { titel: string; jahr: number | null; eintraege: DuplikatEintrag[] }[];
+}
+
+export interface KodiSyncErgebnis {
+  geprüft: number;
+  importiert: number;
+  übersprungen: number;
+  importierte_filme: { tmdb_id: number; titel: string }[];
+  dubletten: { imdb_id: string; vorhandene_tmdb_id: number; kodi_tmdb_id: number; titel: string }[];
+}
+
+export interface LaufzeitErgebnis {
+  geprüft: number;
+  aktualisiert: number;
+  ohne_laufzeit: number;
+}
+
+/** Liest eine NDJSON-Antwort zeilenweise mit, damit Zwischenstände live erscheinen. */
+async function leseNdjson(res: Response, onLine: (line: unknown) => void): Promise<void> {
+  if (!res.body) throw new Error("Keine Antwort erhalten");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let puffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    puffer += decoder.decode(value, { stream: true });
+    const zeilen = puffer.split("\n");
+    puffer = zeilen.pop() ?? "";
+    for (const zeile of zeilen) if (zeile.trim()) onLine(JSON.parse(zeile));
+  }
+  if (puffer.trim()) onLine(JSON.parse(puffer));
+}
+
+async function adminStream(
+  path: string,
+  body: unknown,
+  onLine: (line: unknown) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const res = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new Error(`Fehler ${res.status}`);
+  await leseNdjson(res, onLine);
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     credentials: "same-origin",
@@ -114,11 +176,12 @@ export const api = {
     request<{ ergänzt: string[] }>(`/api/collection/${tmdb_id}/enrich`, { method: "POST", body: "{}" }),
   enrichPreview: () => request<EnrichPreview>("/api/admin/enrich-preview"),
   enrich: (fields: EnrichField[], onLine: (line: unknown) => void, signal?: AbortSignal) =>
-    fetch("/api/admin/enrich?omdb_limit=900", { method: "POST", credentials: "same-origin", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) }).then(async (res) => {
-      if (!res.ok) throw new Error(`Fehler ${res.status}`);
-      const text = await res.text();
-      for (const line of text.split("\n").filter(Boolean)) onLine(JSON.parse(line));
-    }),
+    adminStream("/api/admin/enrich?omdb_limit=900", { fields }, onLine, signal),
+  kodiSync: () => request<KodiSyncErgebnis>("/api/admin/kodi-full-sync", { method: "POST", body: "{}" }),
+  kodiPoster: (onLine: (line: unknown) => void) => adminStream("/api/admin/enrich-posters", {}, onLine),
+  kodiSchauspieler: (onLine: (line: unknown) => void) => adminStream("/api/admin/enrich-actors", {}, onLine),
+  laufzeiten: () => request<LaufzeitErgebnis>("/api/admin/runtime-backfill-tmdb", { method: "POST", body: "{}" }),
+  dubletten: () => request<DuplikatBericht>("/api/admin/duplicates"),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

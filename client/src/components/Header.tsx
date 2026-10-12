@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import ChangePasswordModal from "./ChangePasswordModal";
 import AdminEnrichPanel from "./AdminEnrichPanel";
+import AdminMaintenancePanel from "./AdminMaintenancePanel";
 import UserAdminModal from "./UserAdminModal";
 
 export default function Header() {
@@ -13,6 +14,7 @@ export default function Header() {
   const [showChangePw, setShowChangePw] = useState(false);
   const [showUserAdmin, setShowUserAdmin] = useState(false);
   const [showEnrich, setShowEnrich] = useState(false);
+  const [showWartung, setShowWartung] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -40,6 +42,7 @@ export default function Header() {
       <div className="user-area">
         {user?.is_admin === 1 && <button onClick={() => setShowNewUser(!showNewUser)}>Nutzer anlegen</button>}
         {user?.is_admin === 1 && <button onClick={() => setShowEnrich(!showEnrich)}>Daten ergänzen</button>}
+        {user?.is_admin === 1 && <button onClick={() => setShowWartung(!showWartung)}>Wartung</button>}
         {user?.is_admin === 1 && <button onClick={() => setShowUserAdmin(true)}>Nutzer verwalten</button>}
         <button onClick={() => setShowChangePw(true)}>Passwort ändern</button>
         <span className="user-name">{user?.name}</span>
@@ -63,6 +66,7 @@ export default function Header() {
       {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
       {showUserAdmin && <UserAdminModal onClose={() => setShowUserAdmin(false)} onChanged={() => void refresh()} />}
       {showEnrich && user?.is_admin === 1 && <AdminEnrichPanel />}
+      {showWartung && user?.is_admin === 1 && <AdminMaintenancePanel />}
     </header>
   );
 }
