@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { api, type DuplikatBericht } from "../api";
+import { api, type AbgleichBericht, type DuplikatBericht } from "../api";
 
-type Aktion = "kodi-sync" | "kodi-poster" | "kodi-schauspieler" | "laufzeiten" | "dubletten";
+type Aktion = "kodi-sync" | "kodi-poster" | "kodi-schauspieler" | "kodi-abgleich" | "laufzeiten" | "dubletten";
 
 const AKTIONEN: { key: Aktion; label: string; hinweis: string }[] = [
   { key: "kodi-sync", label: "Kodi-Sync", hinweis: "Importiert neue Filme aus der Kodi-Datenbank." },
+  { key: "kodi-abgleich", label: "Kodi-Abgleich", hinweis: "Findet movie-db-Einträge, die es in Kodi nicht mehr gibt." },
   { key: "kodi-poster", label: "Kodi-Poster", hinweis: "Übernimmt lokale Poster aus der Kodi-Datenbank." },
   { key: "kodi-schauspieler", label: "Schauspielerfotos", hinweis: "Importiert fehlende Schauspielerfotos aus Kodi." },
   { key: "laufzeiten", label: "Laufzeiten", hinweis: "Ergänzt fehlende Laufzeiten aus TMDB." },
@@ -26,11 +27,13 @@ export default function AdminMaintenancePanel() {
   const [busy, setBusy] = useState<Aktion | null>(null);
   const [meldung, setMeldung] = useState("");
   const [dubletten, setDubletten] = useState<DuplikatBericht | null>(null);
+  const [abgleich, setAbgleich] = useState<AbgleichBericht | null>(null);
 
   async function starte(aktion: Aktion) {
     setBusy(aktion);
     setMeldung("");
     setDubletten(null);
+    setAbgleich(null);
     try {
       if (aktion === "kodi-sync") {
         const r = await api.kodiSync();
@@ -38,6 +41,10 @@ export default function AdminMaintenancePanel() {
         if (r.importierte_filme.length > 0) teile.push(`neu: ${r.importierte_filme.map((f) => f.titel).join(", ")}`);
         if (r.dubletten.length > 0) teile.push(`als Dublette übersprungen: ${r.dubletten.length}`);
         setMeldung(teile.join("\n"));
+      } else if (aktion === "kodi-abgleich") {
+        const r = await api.kodiAbgleich();
+        setAbgleich(r);
+        setMeldung(`${r.geprüft} Kodi-Einträge geprüft: ${r.vorhanden} vorhanden, ${r.merges.length} zusammenzuführen, ${r.waisen.length} löschbar, ${r.waisenMitNutzerdaten.length} mit Nutzerdaten`);
       } else if (aktion === "kodi-poster") {
         await api.kodiPoster((zeile) => setMeldung(fortschrittsText(zeile, "Poster aktualisiert")));
       } else if (aktion === "kodi-schauspieler") {
@@ -48,6 +55,27 @@ export default function AdminMaintenancePanel() {
       } else {
         setDubletten(await api.dubletten());
       }
+    } catch (e) {
+      setMeldung(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function bereinigeAbgleich() {
+    if (!abgleich) return;
+    setBusy("kodi-abgleich");
+    try {
+      const r = await api.kodiAbgleichBereinigen({
+        merges: abgleich.merges.map((m) => ({ alt: m.alt, neu: m.neu })),
+        deletes: abgleich.waisen.map((w) => w.tmdb_id),
+      });
+      const zusammengefuehrt = r.merges.filter((m) => m.status === "ok").length;
+      setMeldung(
+        `bereinigt: ${zusammengefuehrt} zusammengeführt, ${r.geloescht.length} gelöscht` +
+          (r.uebersprungen_nutzerdaten.length > 0 ? `, ${r.uebersprungen_nutzerdaten.length} mit Nutzerdaten übersprungen` : "")
+      );
+      setAbgleich(await api.kodiAbgleich());
     } catch (e) {
       setMeldung(e instanceof Error ? e.message : "Fehler");
     } finally {
@@ -85,6 +113,53 @@ export default function AdminMaintenancePanel() {
                   „{g.titel}“ ({g.jahr}): {g.eintraege.map((e) => e.tmdb_id).join(", ")}
                 </p>
               ))}
+            </>
+          )}
+        </div>
+      )}
+      {abgleich && (
+        <div className="admin-meldung">
+          {abgleich.merges.length === 0 && abgleich.waisen.length === 0 && abgleich.waisenMitNutzerdaten.length === 0 ? (
+            <p>Alles abgeglichen — keine Abweichungen.</p>
+          ) : (
+            <>
+              {abgleich.merges.length > 0 && (
+                <>
+                  <p>Zusammenzuführen (gleicher Film unter anderer TMDB-ID):</p>
+                  {abgleich.merges.map((m) => (
+                    <p key={m.alt}>
+                      {m.alt} → {m.neu}: „{m.titel}“ ({m.jahr ?? "?"})
+                    </p>
+                  ))}
+                </>
+              )}
+              {abgleich.waisen.length > 0 && (
+                <>
+                  <p>In Kodi nicht mehr vorhanden (löschbar):</p>
+                  {abgleich.waisen.map((w) => (
+                    <p key={w.tmdb_id}>
+                      {w.tmdb_id}: „{w.titel}“ ({w.jahr ?? "?"})
+                    </p>
+                  ))}
+                </>
+              )}
+              {abgleich.waisenMitNutzerdaten.length > 0 && (
+                <>
+                  <p>In Kodi nicht mehr vorhanden, aber mit Nutzerdaten (nicht automatisch gelöscht):</p>
+                  {abgleich.waisenMitNutzerdaten.map((w) => (
+                    <p key={w.tmdb_id}>
+                      {w.tmdb_id}: „{w.titel}“ ({w.jahr ?? "?"})
+                    </p>
+                  ))}
+                </>
+              )}
+              <button
+                className="primary"
+                onClick={() => void bereinigeAbgleich()}
+                disabled={busy !== null || (abgleich.merges.length === 0 && abgleich.waisen.length === 0)}
+              >
+                Bereinigen ({abgleich.merges.length + abgleich.waisen.length})
+              </button>
             </>
           )}
         </div>

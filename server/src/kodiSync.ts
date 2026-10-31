@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import mysql from "mysql2/promise";
+import type { KodiBestand } from "./kodiAbgleich.js";
 
 export interface KodiSyncConfig {
   host: string;
@@ -172,6 +173,40 @@ const verbindeKodi: KodiVerbinder = async (cfg) =>
     user: cfg.user,
     password: cfg.password,
   }) as unknown as KodiVerbindung;
+
+/**
+ * Liest den aktuellen Kodi-Bestand: alle TMDB-IDs mit gültiger Datei sowie die
+ * Zuordnung IMDb-ID → TMDB-ID. Grundlage für den Abgleich mit movie-db.
+ */
+export async function fetchKodiBestand(
+  cfg: KodiSyncConfig,
+  verbinder: KodiVerbinder = verbindeKodi
+): Promise<KodiBestand> {
+  const conn = await verbinder(cfg);
+  try {
+    const [rows] = (await conn.query(`
+      SELECT u.value AS tmdb_id,
+             (SELECT value FROM uniqueid
+               WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'imdb' LIMIT 1) AS imdb_id
+      FROM movie m
+      JOIN files f ON f.idFile = m.idFile
+      JOIN uniqueid u
+        ON u.media_id = m.idMovie AND u.media_type = 'movie'
+       AND u.type = 'tmdb' AND u.value REGEXP '^[0-9]+$'
+    `)) as [{ tmdb_id: string; imdb_id: string | null }[], unknown];
+
+    const tmdbIds = new Set<string>();
+    const imdbZuTmdb = new Map<string, string>();
+    for (const row of rows) {
+      const tmdbId = String(row.tmdb_id);
+      tmdbIds.add(tmdbId);
+      if (row.imdb_id) imdbZuTmdb.set(row.imdb_id, tmdbId);
+    }
+    return { tmdbIds, imdbZuTmdb };
+  } finally {
+    await conn.end();
+  }
+}
 
 export async function syncKodiMovies(
   db: Database.Database,

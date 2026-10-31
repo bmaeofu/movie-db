@@ -94,6 +94,28 @@ export interface DuplikatBericht {
   titel_jahr_gruppen: { titel: string; jahr: number | null; eintraege: DuplikatEintrag[] }[];
 }
 
+export interface AbgleichEintrag {
+  tmdb_id: number;
+  titel: string;
+  jahr: number | null;
+  imdb_id: string | null;
+  nutzerdaten: boolean;
+}
+
+export interface AbgleichBericht {
+  geprüft: number;
+  vorhanden: number;
+  merges: { alt: number; neu: number; titel: string; jahr: number | null }[];
+  waisen: AbgleichEintrag[];
+  waisenMitNutzerdaten: AbgleichEintrag[];
+}
+
+export interface AbgleichErgebnis {
+  merges: { alt: number; neu: number; status: string; merge?: boolean }[];
+  geloescht: number[];
+  uebersprungen_nutzerdaten: number[];
+}
+
 export interface KodiSyncErgebnis {
   geprüft: number;
   importiert: number;
@@ -182,6 +204,9 @@ export const api = {
   kodiSchauspieler: (onLine: (line: unknown) => void) => adminStream("/api/admin/enrich-actors", {}, onLine),
   laufzeiten: () => request<LaufzeitErgebnis>("/api/admin/runtime-backfill-tmdb", { method: "POST", body: "{}" }),
   dubletten: () => request<DuplikatBericht>("/api/admin/duplicates"),
+  kodiAbgleich: () => request<AbgleichBericht>("/api/admin/kodi-reconcile"),
+  kodiAbgleichBereinigen: (payload: { merges: { alt: number; neu: number }[]; deletes: number[] }) =>
+    request<AbgleichErgebnis>("/api/admin/kodi-reconcile", { method: "POST", body: JSON.stringify(payload) }),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

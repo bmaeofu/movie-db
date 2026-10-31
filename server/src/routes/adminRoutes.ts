@@ -4,7 +4,8 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import type { TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
-import { fetchKodiActorPhotos, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
+import { fetchKodiActorPhotos, fetchKodiBestand, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
+import { klassifiziereAbgleich, type KodiBestand } from "../kodiAbgleich.js";
 
 /** Titel, die kein echter Filmtitel sind: leer oder der Kodi-Import-Platzhalter. */
 function istPlatzhalterTitel(titel: string | null): boolean {
@@ -18,6 +19,101 @@ const ENRICH_LOG = "/data/logs/enrich.log";function logEnrich(event: Record<stri
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
   router.use(requireAuth(db), requireAdmin);
+
+  /** Validiert {alt, neu}-Paare für TMDB-ID-Korrekturen. */
+  function validiereFixes(input: unknown): { alt: number; neu: number }[] {
+    if (!Array.isArray(input)) return [];
+    return input.filter(
+      (f): f is { alt: number; neu: number } =>
+        f !== null &&
+        typeof f === "object" &&
+        typeof (f as { alt?: unknown }).alt === "number" &&
+        Number.isInteger((f as { alt: number }).alt) &&
+        typeof (f as { neu?: unknown }).neu === "number" &&
+        Number.isInteger((f as { neu: number }).neu) &&
+        (f as { alt: number }).alt > 0 &&
+        (f as { neu: number }).neu > 0 &&
+        (f as { alt: number }).alt !== (f as { neu: number }).neu
+    );
+  }
+
+  /**
+   * Führt validierte TMDB-ID-Korrekturen aus: verschiebt Nutzerdaten und legt den
+   * Eintrag unter der neuen ID an (bzw. führt ihn mit einem bestehenden zusammen).
+   */
+  function fuehreFixesAus(fixes: { alt: number; neu: number }[]): {
+    alt: number;
+    neu: number;
+    status: string;
+    merge?: boolean;
+  }[] {
+    const copyMovie = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                          land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert)
+       SELECT @neu, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+              land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert
+       FROM movies WHERE tmdb_id = @alt`
+    );
+    const exists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?");
+    const existsCol = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
+    const mvRatings = db.prepare(
+      "INSERT OR IGNORE INTO ratings (user_id, tmdb_id, sterne, updated_at) SELECT user_id, ?, sterne, updated_at FROM ratings WHERE tmdb_id = ?"
+    );
+    const delRatings = db.prepare("DELETE FROM ratings WHERE tmdb_id = ?");
+    const mvStatus = db.prepare(
+      "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT user_id, ?, status FROM watch_status WHERE tmdb_id = ?"
+    );
+    const delStatus = db.prepare("DELETE FROM watch_status WHERE tmdb_id = ?");
+    const mvNotes = db.prepare(
+      "INSERT OR IGNORE INTO notes (user_id, tmdb_id, text, updated_at) SELECT user_id, ?, text, updated_at FROM notes WHERE tmdb_id = ?"
+    );
+    const delNotes = db.prepare("DELETE FROM notes WHERE tmdb_id = ?");
+    const mvList = db.prepare(
+      "INSERT OR IGNORE INTO list_items (list_id, tmdb_id) SELECT list_id, ? FROM list_items WHERE tmdb_id = ?"
+    );
+    const delList = db.prepare("DELETE FROM list_items WHERE tmdb_id = ?");
+    const mvCol = db.prepare("UPDATE collection SET tmdb_id = ? WHERE tmdb_id = ?");
+    const delCol = db.prepare("DELETE FROM collection WHERE tmdb_id = ?");
+    const delMovie = db.prepare("DELETE FROM movies WHERE tmdb_id = ?");
+    // Beim Merge (Ziel existiert): Platzhalter-Titel des Zieleintrags aus dem alten Eintrag füllen
+    const uebernehmeTitel = db.prepare(
+      `UPDATE movies SET titel = (SELECT titel FROM movies WHERE tmdb_id = @alt)
+       WHERE tmdb_id = @neu AND (TRIM(titel) = '' OR titel = 'Unbekannter Titel')
+         AND TRIM((SELECT titel FROM movies WHERE tmdb_id = @alt)) <> ''`
+    );
+
+    const results: { alt: number; neu: number; status: string; merge?: boolean }[] = [];
+    const apply = db.transaction(() => {
+      for (const f of fixes) {
+        if (!exists.get(f.alt)) {
+          results.push({ alt: f.alt, neu: f.neu, status: "alt_nicht_gefunden" });
+          continue;
+        }
+        const merge = Boolean(exists.get(f.neu));
+        if (!merge) copyMovie.run({ neu: f.neu, alt: f.alt });
+        else uebernehmeTitel.run({ neu: f.neu, alt: f.alt });
+
+        mvRatings.run(f.neu, f.alt);
+        delRatings.run(f.alt);
+        mvStatus.run(f.neu, f.alt);
+        delStatus.run(f.alt);
+        mvNotes.run(f.neu, f.alt);
+        delNotes.run(f.alt);
+        mvList.run(f.neu, f.alt);
+        delList.run(f.alt);
+
+        if (existsCol.get(f.neu)) {
+          delCol.run(f.alt);
+        } else {
+          mvCol.run(f.neu, f.alt);
+        }
+        delMovie.run(f.alt);
+        results.push({ alt: f.alt, neu: f.neu, status: "ok", merge });
+      }
+    });
+    apply();
+    return results;
+  }
 
   const updateEnriched = db.prepare(
     `UPDATE movies SET land = ?, regisseure = ?, autoren = ?, "cast" = ?, tmdb_bewertung = ?, tmdb_stimmen = ?,
@@ -569,85 +665,108 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         res.status(400).json({ error: "fixes: Array mit max. 500 {alt, neu}-Einträgen erforderlich" });
         return;
       }
-      const valid = fixes.filter(
-        (f): f is { alt: number; neu: number } =>
-          f !== null &&
-          typeof f === "object" &&
-          typeof (f as { alt?: unknown }).alt === "number" &&
-          Number.isInteger((f as { alt: number }).alt) &&
-          typeof (f as { neu?: unknown }).neu === "number" &&
-          Number.isInteger((f as { neu: number }).neu) &&
-          (f as { alt: number }).alt > 0 &&
-          (f as { neu: number }).neu > 0 &&
-          (f as { alt: number }).alt !== (f as { neu: number }).neu
-      );
+      const valid = validiereFixes(fixes);
 
-      const copyMovie = db.prepare(
-        `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                            land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert)
-         SELECT @neu, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, zuletzt_aktualisiert
-         FROM movies WHERE tmdb_id = @alt`
+      res.json({ fixes: fuehreFixesAus(valid) });
+    })
+  );
+
+  /**
+   * Gleicht movie-db-Einträge mit source="kodi" gegen den aktuellen Kodi-Bestand ab.
+   * Meldet vorhandene Filme, Merge-Vorschläge (gleiche IMDb-ID, andere TMDB-ID) und Waisen.
+   */
+  router.get(
+    "/kodi-reconcile",
+    asyncHandler(async (_req, res) => {
+      const kodiCfg: KodiSyncConfig = {
+        host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+        port: Number(process.env.KODI_DB_PORT ?? 3306),
+        database: process.env.KODI_DB_NAME ?? "MyVideos131",
+        user: process.env.KODI_DB_USER ?? "root",
+        password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+      };
+
+      const eintraege = db
+        .prepare(
+          `SELECT m.tmdb_id, m.titel, m.jahr,
+                  json_extract(m.tmdb_json, '$.imdb_id') AS imdb_id,
+                  (EXISTS (SELECT 1 FROM ratings r WHERE r.tmdb_id = m.tmdb_id)
+                   OR EXISTS (SELECT 1 FROM notes n WHERE n.tmdb_id = m.tmdb_id)
+                   OR EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = m.tmdb_id)
+                   OR EXISTS (SELECT 1 FROM watch_status ws WHERE ws.tmdb_id = m.tmdb_id AND ws.status <> 'neu')) AS nutzerdaten
+           FROM movies m JOIN collection c ON c.tmdb_id = m.tmdb_id
+           WHERE m.source = 'kodi' AND m.tmdb_id > 0
+           ORDER BY m.titel`
+        )
+        .all() as { tmdb_id: number; titel: string; jahr: number | null; imdb_id: string | null; nutzerdaten: number }[];
+
+      let bestand: KodiBestand;
+      try {
+        bestand = await fetchKodiBestand(kodiCfg);
+      } catch (err) {
+        console.error("Kodi-Abgleich fehlgeschlagen:", err);
+        res.status(502).json({ error: "Kodi-Datenbank nicht erreichbar" });
+        return;
+      }
+
+      const bericht = klassifiziereAbgleich(
+        eintraege.map((e) => ({ ...e, nutzerdaten: Boolean(e.nutzerdaten) })),
+        bestand
       );
-      const exists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?");
-      const existsCol = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
-      const mvRatings = db.prepare(
-        "INSERT OR IGNORE INTO ratings (user_id, tmdb_id, sterne, updated_at) SELECT user_id, ?, sterne, updated_at FROM ratings WHERE tmdb_id = ?"
+      res.json(bericht);
+    })
+  );
+
+  /**
+   * Bereinigt nach dem Abgleich: führt Merges aus und löscht Waisen.
+   * Waisen mit Nutzerdaten werden nie gelöscht, sondern zurückgemeldet.
+   * body: { merges?: [{ alt, neu }], deletes?: number[] }
+   */
+  router.post(
+    "/kodi-reconcile",
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as { merges?: unknown; deletes?: unknown };
+      const merges = validiereFixes(body.merges);
+      const deletes = Array.isArray(body.deletes)
+        ? body.deletes.filter(
+            (id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0
+          )
+        : [];
+      if (deletes.length > 500) {
+        res.status(400).json({ error: "deletes: max. 500 Einträge" });
+        return;
+      }
+
+      const hatNutzerdaten = db.prepare(
+        `SELECT (EXISTS (SELECT 1 FROM ratings r WHERE r.tmdb_id = @id)
+              OR EXISTS (SELECT 1 FROM notes n WHERE n.tmdb_id = @id)
+              OR EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = @id)
+              OR EXISTS (SELECT 1 FROM watch_status ws WHERE ws.tmdb_id = @id AND ws.status <> 'neu')) AS n`
       );
-      const delRatings = db.prepare("DELETE FROM ratings WHERE tmdb_id = ?");
-      const mvStatus = db.prepare(
-        "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT user_id, ?, status FROM watch_status WHERE tmdb_id = ?"
-      );
-      const delStatus = db.prepare("DELETE FROM watch_status WHERE tmdb_id = ?");
-      const mvNotes = db.prepare(
-        "INSERT OR IGNORE INTO notes (user_id, tmdb_id, text, updated_at) SELECT user_id, ?, text, updated_at FROM notes WHERE tmdb_id = ?"
-      );
-      const delNotes = db.prepare("DELETE FROM notes WHERE tmdb_id = ?");
-      const mvList = db.prepare(
-        "INSERT OR IGNORE INTO list_items (list_id, tmdb_id) SELECT list_id, ? FROM list_items WHERE tmdb_id = ?"
-      );
-      const delList = db.prepare("DELETE FROM list_items WHERE tmdb_id = ?");
-      const mvCol = db.prepare("UPDATE collection SET tmdb_id = ? WHERE tmdb_id = ?");
       const delCol = db.prepare("DELETE FROM collection WHERE tmdb_id = ?");
       const delMovie = db.prepare("DELETE FROM movies WHERE tmdb_id = ?");
-      // Beim Merge (Ziel existiert): Platzhalter-Titel des Zieleintrags aus dem alten Eintrag füllen
-      const uebernehmeTitel = db.prepare(
-        `UPDATE movies SET titel = (SELECT titel FROM movies WHERE tmdb_id = @alt)
-         WHERE tmdb_id = @neu AND (TRIM(titel) = '' OR titel = 'Unbekannter Titel')
-           AND TRIM((SELECT titel FROM movies WHERE tmdb_id = @alt)) <> ''`
-      );
 
-      const results: { alt: number; neu: number; status: string; merge?: boolean }[] = [];
+      const geloescht: number[] = [];
+      const uebersprungen: number[] = [];
       const apply = db.transaction(() => {
-        for (const f of valid) {
-          if (!exists.get(f.alt)) {
-            results.push({ alt: f.alt, neu: f.neu, status: "alt_nicht_gefunden" });
+        for (const id of deletes) {
+          const row = hatNutzerdaten.get({ id }) as { n: number } | undefined;
+          if (row?.n) {
+            uebersprungen.push(id);
             continue;
           }
-          const merge = Boolean(exists.get(f.neu));
-          if (!merge) copyMovie.run({ neu: f.neu, alt: f.alt });
-          else uebernehmeTitel.run({ neu: f.neu, alt: f.alt });
-
-          mvRatings.run(f.neu, f.alt);
-          delRatings.run(f.alt);
-          mvStatus.run(f.neu, f.alt);
-          delStatus.run(f.alt);
-          mvNotes.run(f.neu, f.alt);
-          delNotes.run(f.alt);
-          mvList.run(f.neu, f.alt);
-          delList.run(f.alt);
-
-          if (existsCol.get(f.neu)) {
-            delCol.run(f.alt);
-          } else {
-            mvCol.run(f.neu, f.alt);
-          }
-          delMovie.run(f.alt);
-          results.push({ alt: f.alt, neu: f.neu, status: "ok", merge });
+          const colChanges = delCol.run(id).changes;
+          const movieChanges = delMovie.run(id).changes;
+          if (colChanges + movieChanges > 0) geloescht.push(id);
         }
       });
       apply();
-      res.json({ fixes: results });
+
+      res.json({
+        merges: fuehreFixesAus(merges),
+        geloescht,
+        uebersprungen_nutzerdaten: uebersprungen,
+      });
     })
   );
 
