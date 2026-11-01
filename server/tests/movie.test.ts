@@ -107,7 +107,7 @@ describe("Bewertung, Status, Notizen", () => {
     expect(ok.body.dateien[0].pfad).toBe("/media/FilmeHD3/Inception.mkv");
     expect(ok.body.dateien[0].ziele.map((z: { name: string }) => z.name)).toEqual(["desktop", "android"]);
     expect(ok.body.dateien[0].ziele[1].url).toBe(
-      "intent://192.168.178.75/media/FilmeHD3/Inception.mkv#Intent;scheme=smb;package=org.videolan.vlc;end"
+      "intent://192.168.178.75/media/tv/FilmeHD3/Inception.mkv#Intent;scheme=smb;package=org.videolan.vlc;end"
     );
 
     // ohne gespeicherten Pfad und ohne erreichbares Kodi → 404

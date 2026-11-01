@@ -16,12 +16,12 @@ export const PLAYBACK_ZIELE: PlaybackZiel[] = [
   {
     name: "desktop",
     template: "dvbplay://{{path}}",
-    path_map: { "/media": String.raw`\\192.168.178.75\media` },
+    path_map: { "/media": String.raw`\\192.168.178.75\media\tv` },
   },
   {
     name: "android",
     template: "intent://{{path}}#Intent;scheme=smb;package=org.videolan.vlc;end",
-    path_map: { "/media": "192.168.178.75/media" },
+    path_map: { "/media": "192.168.178.75/media/tv" },
   },
 ];
 

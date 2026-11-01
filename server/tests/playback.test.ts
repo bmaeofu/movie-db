@@ -9,8 +9,8 @@ describe("Playback-URLs", () => {
   it("bildet den Pfad je Ziel ab und setzt das Template ein", () => {
     const ziele = bauePlayUrls("/media/FilmeHD3/Es.mkv");
     expect(ziele).toEqual([
-      { name: "desktop", url: String.raw`dvbplay://\\192.168.178.75\media\FilmeHD3\Es.mkv` },
-      { name: "android", url: "intent://192.168.178.75/media/FilmeHD3/Es.mkv#Intent;scheme=smb;package=org.videolan.vlc;end" },
+      { name: "desktop", url: String.raw`dvbplay://\\192.168.178.75\media\tv\FilmeHD3\Es.mkv` },
+      { name: "android", url: "intent://192.168.178.75/media/tv/FilmeHD3/Es.mkv#Intent;scheme=smb;package=org.videolan.vlc;end" },
     ]);
   });
 
