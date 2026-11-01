@@ -22,6 +22,19 @@ Das Script schreibt die Richtlinie für Chrome und Edge (HKLM) und gibt den
 gesetzten Wert aus. Origin anpassen, falls die App unter einer anderen Adresse
 läuft (`$Origin` im Script).
 
+> **Nicht `reg add` verwenden.** `reg add … /d $json` entfernt die
+> Anführungszeichen, sodass `[{protocol:dvbplay,…}]` gespeichert wird — kein
+> gültiges JSON, Chrome verwirft die Richtlinie. `Set-ItemProperty` (und das
+> Script) erhalten den String unverändert.
+
+Manuell, falls das Script nicht verwendet wird:
+
+```powershell
+$json = '[{"protocol":"dvbplay","allowed_origins":["http://192.168.178.75:11000"]}]'
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name AutoLaunchProtocolsFromOrigins -Value $json -Type String
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name AutoLaunchProtocolsFromOrigins -Value $json -Type String
+```
+
 ## Danach
 
 1. Chrome vollständig beenden (alle Fenster, auch Hintergrundprozesse).
