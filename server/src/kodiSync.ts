@@ -27,6 +27,7 @@ interface KodiMovieRow {
   imdb_id: string | null;
   poster: string | null;
   datei: string | null;
+  datei_pfad: string | null;
 }
 
 interface KodiCastRow {
@@ -159,7 +160,7 @@ export async function fetchKodiActorPhotos(
 
 /** Minimale Kodi-Verbindungsschnittstelle, damit der Sync mit einer Testverbindung läuft. */
 export interface KodiVerbindung {
-  query(sql: string): Promise<[unknown, unknown]>;
+  query(sql: string, params?: unknown[]): Promise<[unknown, unknown]>;
   end(): Promise<void>;
 }
 
@@ -208,6 +209,48 @@ export async function fetchKodiBestand(
   }
 }
 
+/** Kodi-Verbindungsdaten aus der Umgebung (einheitlich für alle Routen). */
+export function kodiKonfigurationAusEnv(): KodiSyncConfig {
+  return {
+    host: process.env.KODI_DB_HOST ?? "192.168.178.75",
+    port: Number(process.env.KODI_DB_PORT ?? 3306),
+    database: process.env.KODI_DB_NAME ?? "MyVideos131",
+    user: process.env.KODI_DB_USER ?? "root",
+    password: process.env.KODI_DB_PASSWORD ?? "kodi-db",
+  };
+}
+
+/** Mediathek-Pfade eines Films, wie Kodi sie führt (leer, wenn nicht vorhanden). */
+export async function fetchKodiDateien(
+  cfg: KodiSyncConfig,
+  tmdbId: number,
+  verbinder: KodiVerbinder = verbindeKodi
+): Promise<string[]> {
+  const conn = await verbinder(cfg);
+  try {
+    const [rows] = (await conn.query(
+      `SELECT CONCAT(p.strPath, f.strFilename) AS pfad
+       FROM movie m
+       JOIN files f ON f.idFile = m.idFile
+       JOIN path p ON p.idPath = f.idPath
+       JOIN uniqueid u
+         ON u.media_id = m.idMovie AND u.media_type = 'movie'
+        AND u.type = 'tmdb' AND u.value = ?
+       ORDER BY f.strFilename`,
+      [String(tmdbId)]
+    )) as [{ pfad: string }[], unknown];
+
+    const pfade: string[] = [];
+    for (const row of rows) {
+      const pfad = posterUrl(row.pfad);
+      if (pfad && !pfade.includes(pfad)) pfade.push(pfad);
+    }
+    return pfade;
+  } finally {
+    await conn.end();
+  }
+}
+
 export async function syncKodiMovies(
   db: Database.Database,
   cfg: KodiSyncConfig,
@@ -246,12 +289,14 @@ export async function syncKodiMovies(
           WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'imdb' LIMIT 1) AS imdb_id,
         (SELECT url FROM art
           WHERE media_id = m.idMovie AND media_type = 'movie' AND type = 'poster' LIMIT 1) AS poster,
-        f.strFilename AS datei
+        f.strFilename AS datei,
+        CONCAT(p.strPath, f.strFilename) AS datei_pfad
       FROM movie m
       JOIN uniqueid u
         ON u.media_id = m.idMovie AND u.media_type = 'movie'
        AND u.type = 'tmdb' AND u.value REGEXP '^[0-9]+$'
       LEFT JOIN files f ON f.idFile = m.idFile
+      LEFT JOIN path p ON p.idPath = f.idPath
     `) as [KodiMovieRow[], unknown];
 
     const [castRows] = await conn.query(`
@@ -275,16 +320,17 @@ export async function syncKodiMovies(
 
     const upsert = db.prepare(
       `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
-                          land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source)
+                          land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source, datei_pfade)
        VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
-               @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @laufzeit_minuten, 'kodi')
+               @land, @regisseure, @autoren, @cast, @tmdb_bewertung, @tmdb_stimmen, @imdb_bewertung, @imdb_stimmen, @laufzeit_minuten, 'kodi', @datei_pfade)
        ON CONFLICT(tmdb_id) DO UPDATE SET
          titel = excluded.titel, jahr = excluded.jahr, medientyp = excluded.medientyp,
          genres = excluded.genres, poster_url = excluded.poster_url, overview = excluded.overview,
          tmdb_json = excluded.tmdb_json, land = excluded.land, regisseure = excluded.regisseure,
          autoren = excluded.autoren, "cast" = excluded.cast, tmdb_bewertung = excluded.tmdb_bewertung,
          tmdb_stimmen = excluded.tmdb_stimmen, imdb_bewertung = excluded.imdb_bewertung,
-         imdb_stimmen = excluded.imdb_stimmen, laufzeit_minuten = excluded.laufzeit_minuten, zuletzt_aktualisiert = datetime('now')`
+         imdb_stimmen = excluded.imdb_stimmen, laufzeit_minuten = excluded.laufzeit_minuten,
+        datei_pfade = excluded.datei_pfade, zuletzt_aktualisiert = datetime('now')`
     );
     const inCollection = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
     const addCollection = db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)");
@@ -303,6 +349,19 @@ export async function syncKodiMovies(
       .all() as { tmdb_id: number; imdb_id: string | null }[];
     for (const b of bekannt) if (b.imdb_id) imdbZuTmdb.set(b.imdb_id, b.tmdb_id);
 
+    // Mediathek-Pfade je Film (mehrere Dateien pro TMDB-ID möglich, z. B. Mehrteiler)
+    const pfadeByTmdb = new Map<string, string[]>();
+    for (const row of movieRows) {
+      const pfad = posterUrl(row.datei_pfad);
+      if (!pfad) continue;
+      const liste = pfadeByTmdb.get(row.tmdb_id) ?? [];
+      if (!liste.includes(pfad)) liste.push(pfad);
+      pfadeByTmdb.set(row.tmdb_id, liste);
+    }
+    const setzePfade = db.prepare(
+      "UPDATE movies SET datei_pfade = ?, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?"
+    );
+
     // added_by: erster Admin (Fallback 0)
     const admin = (db.prepare("SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1").get() as
       | { id: number }
@@ -317,6 +376,8 @@ export async function syncKodiMovies(
         const tmdbId = Number(row.tmdb_id);
         if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
         if (inCollection.get(tmdbId)) {
+          const vorhandene = pfadeByTmdb.get(row.tmdb_id);
+          if (vorhandene && vorhandene.length > 0) setzePfade.run(JSON.stringify(vorhandene), tmdbId);
           übersprungen++;
           continue;
         }
@@ -357,6 +418,7 @@ export async function syncKodiMovies(
           imdb_bewertung: row.imdb_bewertung ?? null,
           imdb_stimmen: row.imdb_stimmen ?? null,
           laufzeit_minuten: laufzeit,
+          datei_pfade: JSON.stringify(pfadeByTmdb.get(row.tmdb_id) ?? []),
         });
         addCollection.run(tmdbId, admin);
         markNeu.run(tmdbId);

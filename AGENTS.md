@@ -28,7 +28,7 @@ npm run dev -w client          # Vite :5173, Proxy /api → :3000
 
 ## Datenmodell (wichtig für Änderungen)
 
-- **movies:** `tmdb_id` (PK; **Custom-Einträge = negative IDs**), `titel, jahr, medientyp('film'|'serie'), genres, poster_url, overview, land, regisseure, autoren, "cast" (JSON: {name, rolle}), tmdb_bewertung, tmdb_stimmen, imdb_bewertung, source('user'|'kodi'), tmdb_json`.
+- **movies:** `tmdb_id` (PK; **Custom-Einträge = negative IDs**), `titel, jahr, medientyp('film'|'serie'), genres, poster_url, overview, land, regisseure, autoren, "cast" (JSON: {name, rolle}), tmdb_bewertung, tmdb_stimmen, imdb_bewertung, source('user'|'kodi'), tmdb_json, datei_pfade` (JSON: `/media/…`-Pfade der Mediendateien; vom Kodi-Sync gefüllt, mehrere pro Film möglich).
 - **watch_status.status:** `'neu' | 'schauen' | 'gesehen' | 'kein_interesse'` – `'neu'` wird beim Hinzufügen eines Films automatisch für ALLE Benutzer gesetzt (`INSERT OR IGNORE`), bestehende Status bleiben.
 - **users:** erster registrierter Nutzer = Admin; Admin kann User anlegen/umbenennen/Passwort zurücksetzen/löschen (Guards: letzter Admin unantastbar, kein Selbst-Löschen). Sessions in Tabelle `sessions` (Cookie `fdb_session`, HttpOnly, 30 Tage, Unix-Sekunden).
 - **FK-Kaskaden:** ratings/watch_status/notes/sessions/lists löschen mit dem User; `collection.added_by` → nullable + SET NULL.
@@ -46,6 +46,7 @@ npm run dev -w client          # Vite :5173, Proxy /api → :3000
 - `/api/admin/backfill` (Admin; `?force=1` = alle, `?omdb_limit=N` begrenzt OMDb-Aufrufe/Tag; reichert land/regisseure/autoren/cast/Bewertungen nach)
 - `/api/collection` (GET mit Filtern: `q, text, genre, land, regisseur, jahr, tmdb_min, imdb_min, medientyp, status, sort`; POST mit `{tmdb_id, medientyp, source?, tmdb_bewertung?, imdb_bewertung?}` + `?skip_omdb=1`; POST `/custom` für manuelle Einträge; GET `/facets` → `{laender, regisseure, jahre}`)
 - `/api/movies/:tmdbId/{rating|watch-status|note}` (UPSERTs)
+- `/api/movies/:tmdbId/play` (Wiedergabe-URLs aus `datei_pfade`; ohne gespeicherten Pfad Live-Abfrage der Kodi-DB; Ziele/Templates in `server/src/playback.ts`)
 
 ## Deployment (unRAID + Komodo)
 

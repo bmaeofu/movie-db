@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type ListSummary, type Movie } from "../api";
+import { api, type ListSummary, type Movie, type PlayInfo } from "../api";
 
 const STATUS_OPTIONS: Array<["neu" | "schauen" | "gesehen" | "kein_interesse", string]> = [
   ["neu", "Neu"],
@@ -44,6 +44,34 @@ export default function MovieDetailModal({
   const [showPictures, setShowPictures] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState("");
   const [enrichBusy, setEnrichBusy] = useState(false);
+  const [play, setPlay] = useState<PlayInfo | null>(null);
+  const [ziel, setZiel] = useState("desktop");
+  const [dateiIdx, setDateiIdx] = useState(0);
+
+  useEffect(() => {
+    let aktiv = true;
+    api
+      .playInfo(movie.tmdb_id)
+      .then((info) => {
+        if (!aktiv) return;
+        setPlay(info);
+        const vorhanden = info.dateien[0]?.ziele.map((z) => z.name) ?? [];
+        const bevorzugt = /android/i.test(navigator.userAgent) ? "android" : "desktop";
+        setZiel(vorhanden.includes(bevorzugt) ? bevorzugt : (vorhanden[0] ?? "desktop"));
+      })
+      .catch(() => {
+        if (aktiv) setPlay(null);
+      });
+    return () => {
+      aktiv = false;
+    };
+  }, [movie.tmdb_id]);
+
+  function abspielen() {
+    const datei = play?.dateien[dateiIdx];
+    const url = datei?.ziele.find((z) => z.name === ziel)?.url;
+    if (url) window.location.href = url;
+  }
 
   async function enrich() {
     setEnrichBusy(true);
@@ -111,6 +139,23 @@ export default function MovieDetailModal({
           Quelle: {movie.source === "kodi" ? "Kodi" : `Manuell hinzugefügt${movie.added_by_name ? ` von ${movie.added_by_name}` : ""}`}{movie.added_at ? ` am ${formatAddedAt(movie.added_at)}` : ""}
         </p>
         {movie.laufzeit_minuten !== null && <p className="genres">Laufzeit: {movie.laufzeit_minuten} Min.</p>}
+        {play && play.dateien.length > 0 && (
+          <div className="play">
+            <button className="primary" onClick={abspielen}>Abspielen</button>
+            <select value={ziel} onChange={(e) => setZiel(e.target.value)} aria-label="Wiedergabeziel">
+              {play.dateien[dateiIdx].ziele.map((z) => (
+                <option key={z.name} value={z.name}>{z.name}</option>
+              ))}
+            </select>
+            {play.dateien.length > 1 && (
+              <select value={dateiIdx} onChange={(e) => setDateiIdx(Number(e.target.value))} aria-label="Datei">
+                {play.dateien.map((d, i) => (
+                  <option key={d.pfad} value={i}>{d.pfad.split("/").pop()}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
         {movie.overview && <p className="overview">{movie.overview}</p>}
         {movie.genres.length > 0 && (
           <p className="genres">Genres: {movie.genres.map((g) => (

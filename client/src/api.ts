@@ -116,6 +116,21 @@ export interface AbgleichErgebnis {
   uebersprungen_nutzerdaten: number[];
 }
 
+export interface PlayZiel {
+  name: string;
+  url: string;
+}
+
+export interface PlayDatei {
+  pfad: string;
+  ziele: PlayZiel[];
+}
+
+export interface PlayInfo {
+  tmdb_id: number;
+  dateien: PlayDatei[];
+}
+
 export interface KodiSyncErgebnis {
   geprüft: number;
   importiert: number;
@@ -196,6 +211,7 @@ export const api = {
     request<{ message: string }>("/api/collection", { method: "POST", body: JSON.stringify({ tmdb_id, medientyp }) }),
   enrichFilm: (tmdb_id: number) =>
     request<{ ergänzt: string[] }>(`/api/collection/${tmdb_id}/enrich`, { method: "POST", body: "{}" }),
+  playInfo: (tmdb_id: number) => request<PlayInfo>(`/api/movies/${tmdb_id}/play`),
   enrichPreview: () => request<EnrichPreview>("/api/admin/enrich-preview"),
   enrich: (fields: EnrichField[], onLine: (line: unknown) => void, signal?: AbortSignal) =>
     adminStream("/api/admin/enrich?omdb_limit=900", { fields }, onLine, signal),

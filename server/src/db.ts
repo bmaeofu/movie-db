@@ -25,6 +25,7 @@ export function initSchema(db: Database.Database): void {
       imdb_bewertung REAL,
       imdb_stimmen INTEGER,
       source TEXT NOT NULL DEFAULT 'user',
+      datei_pfade TEXT NOT NULL DEFAULT '[]',
       zuletzt_aktualisiert TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS collection (
@@ -91,7 +92,7 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "imdb_stimmen", "imdb_stimmen INTEGER");
   ensureColumn(db, "movies", "source", "source TEXT NOT NULL DEFAULT 'user'");
   ensureColumn(db, "movies", "laufzeit_minuten", "laufzeit_minuten INTEGER");
-
+  ensureColumn(db, "movies", "datei_pfade", "datei_pfade TEXT NOT NULL DEFAULT '[]'");
   // Migration: watch_status-CHECK um 'neu' erweitern (Bestands-DBs; SQLite kann CHECKs nicht per ALTER ändern)
   const ws = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'watch_status'")

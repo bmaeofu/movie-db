@@ -5,11 +5,18 @@ import { posterUrl, syncKodiMovies, type KodiSyncConfig, type KodiVerbindung } f
 
 const cfg: KodiSyncConfig = { host: "h", port: 3306, database: "d", user: "u", password: "p" };
 
-function kodiZeile(tmdbId: number, titel: string, imdbId: string | null, datei: string | null = "Film.mkv"): Record<string, unknown> {
+function kodiZeile(
+  tmdbId: number,
+  titel: string,
+  imdbId: string | null,
+  datei: string | null = "Film.mkv",
+  dateiPfad: string | null = null
+): Record<string, unknown> {
   return {
     tmdb_id: String(tmdbId),
     titel,
     datei,
+    datei_pfad: dateiPfad,
     jahr: "1999",
     laufzeit: 100,
     overview: "Plot",
@@ -116,6 +123,33 @@ describe("Kodi-Sync", () => {
       { tmdb_id: 601, titel: "Eine fremde Tochter" },
       { tmdb_id: 602, titel: "Rückkehr nach Rimini" },
     ]);
+  });
+
+  it("speichert die Mediathek-Pfade, auch mehrere pro Film", async () => {
+    const ergebnis = await syncKodiMovies(db, cfg, async () =>
+      fakeVerbindung([
+        kodiZeile(700, "Film", null, "Film.mkv", "smb://UMS/media/tv/FilmeHD3/Film.mkv"),
+        kodiZeile(700, "Film", null, "Film (2_2).mkv", "smb://UMS/media/tv/FilmeHD3/Film (2_2).mkv"),
+      ])
+    );
+    expect(ergebnis.importiert).toBe(1);
+    const row = db.prepare("SELECT datei_pfade FROM movies WHERE tmdb_id = 700").get() as { datei_pfade: string };
+    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/FilmeHD3/Film.mkv", "/media/FilmeHD3/Film (2_2).mkv"]);
+  });
+
+  it("ergänzt Pfade auch bei Filmen, die schon in der Sammlung liegen", async () => {
+    db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
+                           land, regisseure, autoren, "cast", source)
+       VALUES (800, 'Bestand', 1999, 'film', '[]', NULL, NULL, '{}', '[]', '[]', '[]', '[]', 'kodi')`
+    ).run();
+    db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (800, 1)").run();
+
+    await syncKodiMovies(db, cfg, async () =>
+      fakeVerbindung([kodiZeile(800, "Bestand", null, "Bestand.mkv", "smb://UMS/media/tv/FilmeHD2/Bestand.mkv")])
+    );
+    const row = db.prepare("SELECT datei_pfade FROM movies WHERE tmdb_id = 800").get() as { datei_pfade: string };
+    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/FilmeHD2/Bestand.mkv"]);
   });
 
   it("überspringt Kodi-Filme ohne IMDb-ID nicht fälschlich", async () => {

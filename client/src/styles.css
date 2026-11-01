@@ -156,3 +156,6 @@ input, select, textarea {
 .enrich-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.3rem 0.8rem; }
 .enrich-stats label { display: flex; gap: 0.4rem; align-items: center; }
 .enrich-filter { display: flex; gap: 0.4rem; align-items: center; }
+
+/* Wiedergabe im Film-Detail */
+.play { display: flex; gap: 0.5rem; align-items: center; margin: 0.7rem 0; flex-wrap: wrap; }
