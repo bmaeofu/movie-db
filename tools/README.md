@@ -45,3 +45,10 @@ The handler accepts both forms: `dvbplay://host/path` (URI, used by the app) and
   script if another player is used.
 - The path root is `\\192.168.178.75\media\tv` because the container mounts
   `/mnt/user/media/tv` at `/media`; the app's `/media/…` paths therefore omit `tv`.
+
+## Browser prompt on first click
+
+Chrome asks "Externes Protokoll öffnen?" and does not remember the answer. To start
+without a prompt, register the `AutoLaunchProtocolsFromOrigins` policy once with
+administrator rights — see [browser-policy.md](browser-policy.md) and
+`register-browser-policy.ps1`.
