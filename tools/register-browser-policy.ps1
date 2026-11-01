@@ -1,7 +1,9 @@
 # Registriert die Browser-Richtlinie, damit dvbplay:// ohne Rückfrage startet.
 # Als Administrator ausführen:  powershell -ExecutionPolicy Bypass -File tools\register-browser-policy.ps1
 
-param([string]$Origin = 'http://192.168.178.75:11000')
+param([string[]]$Origins = @('http://192.168.178.75:11000', 'http://ums:11000'))
+# Die Origin muss exakt passen (Schema + Host + Port). 'ums' ist der Tailscale-Name
+# der NAS; beide Adressen werden eingetragen.
 
 $fehler = @()
 
@@ -10,7 +12,8 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
   exit 1
 }
 
-$json = '[{"protocol":"dvbplay","allowed_origins":["' + $Origin + '"]}]'
+$originsJson = ($Origins | ForEach-Object { '"' + $_ + '"' }) -join ','
+$json = '[{"protocol":"dvbplay","allowed_origins":[' + $originsJson + ']}]'
 
 foreach ($zweig in @(
   'HKLM:\SOFTWARE\Policies\Google\Chrome',

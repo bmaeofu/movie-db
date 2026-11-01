@@ -30,7 +30,9 @@ läuft (`$Origin` im Script).
 Manuell, falls das Script nicht verwendet wird:
 
 ```powershell
-$json = '[{"protocol":"dvbplay","allowed_origins":["http://192.168.178.75:11000"]}]'
+# Die Origin muss exakt passen: Schema + Host + Port.
+# Die NAS ist als 192.168.178.75 und als ums (Tailscale) erreichbar — beide eintragen.
+$json = '[{"protocol":"dvbplay","allowed_origins":["http://192.168.178.75:11000","http://ums:11000"]}]'
 Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name AutoLaunchProtocolsFromOrigins -Value $json -Type String
 Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name AutoLaunchProtocolsFromOrigins -Value $json -Type String
 ```
@@ -48,3 +50,11 @@ Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name AutoLaunch
 reg delete "HKLM\SOFTWARE\Policies\Google\Chrome" /v AutoLaunchProtocolsFromOrigins /f
 reg delete "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v AutoLaunchProtocolsFromOrigins /f
 ```
+
+## Anzeigename im Dialog
+
+Chrome nennt im Dialog die ausführbare Datei des Handlers. Ohne eigenen Launcher
+steht dort „Windows PowerShell“. `tools/dvbplay-launcher.cs` wird zu
+`%LOCALAPPDATA%\dvbplay\DvbPlay.exe` kompiliert (Add-Type oder csc) und im
+`dvbplay`-Protokoll als Befehl eingetragen — dann heißt es „DvbPlay“ und es blitzt
+kein Konsolenfenster auf.
