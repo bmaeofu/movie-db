@@ -31,9 +31,13 @@ New-ItemProperty -Path 'HKCU:\Software\Classes\dvbplay\shell\open\command' -Name
 ## Test
 
 ```powershell
-Start-Process 'dvbplay://\\192.168.178.75\media\tv\FilmeHD\FilmeHD3\Aelita.mkv'
+# the app emits the URI form (host/path, forward slashes)
+Start-Process 'dvbplay://192.168.178.75/media/tv/FilmeHD/FilmeHD3/Aelita.mkv'
 Get-Content (Join-Path $env:LOCALAPPDATA 'dvbplay\dvbplay.log')
 ```
+
+The handler accepts both forms: `dvbplay://host/path` (URI, used by the app) and
+`dvbplay://\\host\path` (raw UNC).
 
 ## Notes
 

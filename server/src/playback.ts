@@ -15,8 +15,9 @@ export interface PlaybackZiel {
 export const PLAYBACK_ZIELE: PlaybackZiel[] = [
   {
     name: "desktop",
+    // URI-konform: host/pfad mit Schrägstrichen; der dvbplay-Handler macht daraus \\host\pfad
     template: "dvbplay://{{path}}",
-    path_map: { "/media": String.raw`\\192.168.178.75\media\tv` },
+    path_map: { "/media": "192.168.178.75/media/tv" },
   },
   {
     name: "android",
