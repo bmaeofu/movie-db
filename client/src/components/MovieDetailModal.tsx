@@ -142,11 +142,6 @@ export default function MovieDetailModal({
         {play && play.dateien.length > 0 && (
           <div className="play">
             <button className="primary" onClick={abspielen}>Abspielen</button>
-            <select value={ziel} onChange={(e) => setZiel(e.target.value)} aria-label="Wiedergabeziel">
-              {play.dateien[dateiIdx].ziele.map((z) => (
-                <option key={z.name} value={z.name}>{z.name}</option>
-              ))}
-            </select>
             {play.dateien.length > 1 && (
               <select value={dateiIdx} onChange={(e) => setDateiIdx(Number(e.target.value))} aria-label="Datei">
                 {play.dateien.map((d, i) => (
@@ -154,6 +149,7 @@ export default function MovieDetailModal({
                 ))}
               </select>
             )}
+            <span className="play-ziel">Ziel: {ziel}</span>
           </div>
         )}
         {movie.overview && <p className="overview">{movie.overview}</p>}

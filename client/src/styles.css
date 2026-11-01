@@ -159,3 +159,4 @@ input, select, textarea {
 
 /* Wiedergabe im Film-Detail */
 .play { display: flex; gap: 0.5rem; align-items: center; margin: 0.7rem 0; flex-wrap: wrap; }
+.play-ziel { color: var(--muted); font-size: 0.85rem; }
