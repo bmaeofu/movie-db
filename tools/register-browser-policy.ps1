@@ -1,7 +1,7 @@
 # Registriert die Browser-Richtlinie, damit dvbplay:// ohne Rückfrage startet.
 # Als Administrator ausführen:  powershell -ExecutionPolicy Bypass -File tools\register-browser-policy.ps1
 
-param([string[]]$Origins = @('http://192.168.178.75:11000', 'http://ums:11000'))
+param([string[]]$Origins = @('http://192.168.178.75:11000', 'http://ums:11000', 'http://192.168.178.75:10015'))
 # Die Origin muss exakt passen (Schema + Host + Port). 'ums' ist der Tailscale-Name
 # der NAS; beide Adressen werden eingetragen.
 

@@ -58,3 +58,17 @@ steht dort „Windows PowerShell“. `tools/dvbplay-launcher.cs` wird zu
 `%LOCALAPPDATA%\dvbplay\DvbPlay.exe` kompiliert (Add-Type oder csc) und im
 `dvbplay`-Protokoll als Befehl eingetragen — dann heißt es „DvbPlay“ und es blitzt
 kein Konsolenfenster auf.
+
+## Weitere Origins freigeben
+
+Jede Origin (Schema + Host + Port) muss einzeln aufgeführt sein. Beispiel mit einem
+zweiten Dienst auf Port 10015:
+
+```powershell
+$json = '[{"protocol":"dvbplay","allowed_origins":["http://192.168.178.75:11000","http://ums:11000","http://192.168.178.75:10015"]}]'
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Google\Chrome' -Name AutoLaunchProtocolsFromOrigins -Value $json -Type String
+```
+
+Wird der Dienst auch über den Tailscale-Namen aufgerufen, zusätzlich
+`http://ums:10015` eintragen. Danach Chrome neu starten und in `chrome://policy`
+prüfen, ob der Wert als **OK** erscheint.
