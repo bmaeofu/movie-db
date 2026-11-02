@@ -3,6 +3,8 @@ import request from "supertest";
 import type Database from "better-sqlite3";
 import { createApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
+import type { Express } from "express";
+import { TmdbError } from "../src/tmdb.js";
 import type { TmdbClient, TmdbMovie } from "../src/tmdb.js";
 
 const filme: Record<number, TmdbMovie> = {
@@ -291,6 +293,30 @@ describe("Sammlung", () => {
     expect(imdb.body.map((m: any) => m.tmdb_id)).toEqual([1399, 27205, 157336]);
   });
 
+  it("enrich: unbekannte TMDB-ID meldet 404 statt Ausfall, Serverfehler melden 502", async () => {
+    const db2 = createDb(":memory:");
+    db2.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast")
+       VALUES (424242, 'Altlast', 1990, 'film', '[]', NULL, NULL, '{}', '[]', '[]', '[]', '[]')`
+    ).run();
+    const anna = await request(db2App(db2, new TmdbError("TMDB antwortet mit 404", 404)))
+      .post("/api/auth/register")
+      .send({ name: "Anna", password: "geheim123" });
+    const cookie = anna.headers["set-cookie"][0].split(";")[0];
+    db2.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (424242, 1)").run();
+
+    const weg = await request(db2App(db2, new TmdbError("TMDB antwortet mit 404", 404)))
+      .post("/api/collection/424242/enrich")
+      .set("Cookie", cookie);
+    expect(weg.status).toBe(404);
+    expect(weg.body.error).toContain("nicht vorhanden");
+
+    const ausfall = await request(db2App(db2, new TmdbError("TMDB antwortet mit 503", 503)))
+      .post("/api/collection/424242/enrich")
+      .set("Cookie", cookie);
+    expect(ausfall.status).toBe(502);
+    expect(ausfall.body.error).toContain("nicht erreichbar");
+  });
   it("entfernen: Admin oder Ersteller, sonst 403", async () => {
     const alsBen = await request(app).delete("/api/collection/27205").set("Cookie", benCookie);
     expect(alsBen.status).toBe(403);
@@ -299,4 +325,15 @@ describe("Sammlung", () => {
     const weg = await request(app).get("/api/collection").set("Cookie", annaCookie);
     expect(weg.body.map((m: any) => m.tmdb_id)).not.toContain(27205);
   });
+
 });
+
+function db2App(db: Database.Database, fehler: unknown): Express {
+  const fake: TmdbClient = {
+    search: async () => [],
+    details: async () => {
+      throw fehler;
+    },
+  };
+  return createApp(db, fake);
+}

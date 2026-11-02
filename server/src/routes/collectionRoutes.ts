@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
-import type { TmdbClient } from "../tmdb.js";
+import { TmdbError, type TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
@@ -20,6 +20,20 @@ const FEHLT_SQL: Record<string, string> = {
   imdb_bewertung: "m.imdb_bewertung IS NULL",
   laufzeit: "m.laufzeit_minuten IS NULL",
 };
+
+/** Übersetzt einen TMDB-Fehler in eine passende Antwort (404 ≠ Ausfall). */
+function tmdbFehlerAntwort(err: unknown, res: Response): void {
+  const status = err instanceof TmdbError ? err.status : undefined;
+  if (status === 404) {
+    res.status(404).json({ error: "Film ist bei TMDB nicht vorhanden (ID veraltet?)" });
+    return;
+  }
+  if (status === 401 || status === 403) {
+    res.status(502).json({ error: "TMDB-API-Key ungültig oder gesperrt" });
+    return;
+  }
+  res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
+}
 
 function buildFilter(query: Record<string, unknown>): { where: string[]; params: Record<string, unknown> } {
   const q = typeof query.q === "string" ? query.q.trim() : "";
@@ -263,8 +277,8 @@ export function createCollectionRouter(
       let movie;
       try {
         movie = await tmdb.details(tmdb_id, medientyp);
-      } catch {
-        res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
+      } catch (err) {
+        tmdbFehlerAntwort(err, res);
         return;
       }
       let finalTmdb = movie.tmdb_bewertung;
@@ -453,8 +467,8 @@ export function createCollectionRouter(
       let m;
       try {
         m = await tmdb.details(tmdbId, row.medientyp);
-      } catch {
-        res.status(502).json({ error: "TMDB nicht erreichbar – bitte erneut versuchen" });
+      } catch (err) {
+        tmdbFehlerAntwort(err, res);
         return;
       }
 
