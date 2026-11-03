@@ -116,6 +116,35 @@ export interface AbgleichErgebnis {
   uebersprungen_nutzerdaten: number[];
 }
 
+export interface RematchKandidat {
+  id: number;
+  titel: string;
+  jahr: number | null;
+  medientyp: string;
+}
+
+export interface RematchVorschlag {
+  alt: number;
+  neu: number;
+  medientyp: string;
+  titel: string;
+  jahr: number | null;
+  art: "medientyp" | "id";
+}
+
+export interface RematchBericht {
+  geprüft: number;
+  vorschlaege: RematchVorschlag[];
+  unklar: { tmdb_id: number; titel: string; jahr: number | null; kandidaten: RematchKandidat[] }[];
+  nichts: { tmdb_id: number; titel: string; jahr: number | null }[];
+}
+
+export interface RematchErgebnis {
+  typ_geaendert: number[];
+  merges: { alt: number; neu: number; status: string }[];
+  uebersprungen: number[];
+}
+
 export interface PlayZiel {
   name: string;
   url: string;
@@ -223,6 +252,9 @@ export const api = {
   kodiAbgleich: () => request<AbgleichBericht>("/api/admin/kodi-reconcile"),
   kodiAbgleichBereinigen: (payload: { merges: { alt: number; neu: number }[]; deletes: number[] }) =>
     request<AbgleichErgebnis>("/api/admin/kodi-reconcile", { method: "POST", body: JSON.stringify(payload) }),
+  tmdbRematch: () => request<RematchBericht>("/api/admin/tmdb-rematch"),
+  tmdbRematchAnwenden: (vorschlaege: { alt: number; neu: number; medientyp: string }[]) =>
+    request<RematchErgebnis>("/api/admin/tmdb-rematch", { method: "POST", body: JSON.stringify({ vorschlaege }) }),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

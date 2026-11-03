@@ -468,9 +468,13 @@ export function createCollectionRouter(
       try {
         m = await tmdb.details(tmdbId, row.medientyp);
       } catch (err) {
+        if (err instanceof TmdbError && err.status === 404) {
+          db.prepare("UPDATE movies SET tmdb_fehler = '404' WHERE tmdb_id = ?").run(tmdbId);
+        }
         tmdbFehlerAntwort(err, res);
         return;
       }
+      db.prepare("UPDATE movies SET tmdb_fehler = NULL WHERE tmdb_id = ?").run(tmdbId);
 
       const filled: string[] = [];
       const jahr = row.jahr ?? m.jahr;

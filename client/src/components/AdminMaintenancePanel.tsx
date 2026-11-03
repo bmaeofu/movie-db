@@ -1,11 +1,23 @@
 import { useState } from "react";
-import { api, type AbgleichBericht, type DuplikatBericht } from "../api";
+import { api, type AbgleichBericht, type DuplikatBericht, type RematchBericht } from "../api";
 
-type Aktion = "kodi-sync" | "kodi-poster" | "kodi-schauspieler" | "kodi-abgleich" | "laufzeiten" | "dubletten";
+type Aktion =
+  | "kodi-sync"
+  | "kodi-poster"
+  | "kodi-schauspieler"
+  | "kodi-abgleich"
+  | "tmdb-rematch"
+  | "laufzeiten"
+  | "dubletten";
 
 const AKTIONEN: { key: Aktion; label: string; hinweis: string }[] = [
   { key: "kodi-sync", label: "Kodi-Sync", hinweis: "Importiert neue Filme aus der Kodi-Datenbank." },
   { key: "kodi-abgleich", label: "Kodi-Abgleich", hinweis: "Findet movie-db-Einträge, die es in Kodi nicht mehr gibt." },
+  {
+    key: "tmdb-rematch",
+    label: "TMDB-Neusuche",
+    hinweis: "Sucht für Filme mit erloschener TMDB-ID einen passenden Eintrag über Titel und Jahr.",
+  },
   { key: "kodi-poster", label: "Kodi-Poster", hinweis: "Übernimmt lokale Poster aus der Kodi-Datenbank." },
   { key: "kodi-schauspieler", label: "Schauspielerfotos", hinweis: "Importiert fehlende Schauspielerfotos aus Kodi." },
   { key: "laufzeiten", label: "Laufzeiten", hinweis: "Ergänzt fehlende Laufzeiten aus TMDB." },
@@ -28,12 +40,14 @@ export default function AdminMaintenancePanel() {
   const [meldung, setMeldung] = useState("");
   const [dubletten, setDubletten] = useState<DuplikatBericht | null>(null);
   const [abgleich, setAbgleich] = useState<AbgleichBericht | null>(null);
+  const [rematch, setRematch] = useState<RematchBericht | null>(null);
 
   async function starte(aktion: Aktion) {
     setBusy(aktion);
     setMeldung("");
     setDubletten(null);
     setAbgleich(null);
+    setRematch(null);
     try {
       if (aktion === "kodi-sync") {
         const r = await api.kodiSync();
@@ -45,6 +59,12 @@ export default function AdminMaintenancePanel() {
         const r = await api.kodiAbgleich();
         setAbgleich(r);
         setMeldung(`${r.geprüft} Kodi-Einträge geprüft: ${r.vorhanden} vorhanden, ${r.merges.length} zusammenzuführen, ${r.waisen.length} löschbar, ${r.waisenMitNutzerdaten.length} mit Nutzerdaten`);
+      } else if (aktion === "tmdb-rematch") {
+        const r = await api.tmdbRematch();
+        setRematch(r);
+        setMeldung(
+          `${r.geprüft} Einträge ohne gültige TMDB-ID: ${r.vorschlaege.length} Vorschläge, ${r.unklar.length} unklar, ${r.nichts.length} nicht gefunden`
+        );
       } else if (aktion === "kodi-poster") {
         await api.kodiPoster((zeile) => setMeldung(fortschrittsText(zeile, "Poster aktualisiert")));
       } else if (aktion === "kodi-schauspieler") {
@@ -76,6 +96,26 @@ export default function AdminMaintenancePanel() {
           (r.uebersprungen_nutzerdaten.length > 0 ? `, ${r.uebersprungen_nutzerdaten.length} mit Nutzerdaten übersprungen` : "")
       );
       setAbgleich(await api.kodiAbgleich());
+    } catch (e) {
+      setMeldung(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function wendeRematchAn() {
+    if (!rematch || rematch.vorschlaege.length === 0) return;
+    setBusy("tmdb-rematch");
+    try {
+      const r = await api.tmdbRematchAnwenden(
+        rematch.vorschlaege.map((v) => ({ alt: v.alt, neu: v.neu, medientyp: v.medientyp }))
+      );
+      const umgezogen = r.merges.filter((m) => m.status === "ok").length;
+      setMeldung(
+        `übernommen: ${r.typ_geaendert.length} Medientyp-Korrekturen, ${umgezogen} Umzüge` +
+          (r.uebersprungen.length > 0 ? `, ${r.uebersprungen.length} nicht mehr betroffen` : "")
+      );
+      setRematch(await api.tmdbRematch());
     } catch (e) {
       setMeldung(e instanceof Error ? e.message : "Fehler");
     } finally {
@@ -160,6 +200,42 @@ export default function AdminMaintenancePanel() {
               >
                 Bereinigen ({abgleich.merges.length + abgleich.waisen.length})
               </button>
+            </>
+          )}
+        </div>
+      )}
+      {rematch && (
+        <div className="admin-meldung">
+          {rematch.vorschlaege.length === 0 && rematch.unklar.length === 0 ? (
+            <p>Keine passenden TMDB-Einträge gefunden.</p>
+          ) : (
+            <>
+              {rematch.vorschlaege.length > 0 && (
+                <>
+                  <p>Vorschläge:</p>
+                  {rematch.vorschlaege.map((v) => (
+                    <p key={v.alt}>
+                      {v.alt} {v.alt === v.neu ? "" : `→ ${v.neu} `}„{v.titel}“ ({v.jahr ?? "?"}) —{" "}
+                      {v.art === "medientyp"
+                        ? `als ${v.medientyp === "serie" ? "Serie" : "Film"} führen`
+                        : `Eintrag als ${v.medientyp === "serie" ? "Serie" : "Film"} übernehmen`}
+                    </p>
+                  ))}
+                  <button className="primary" onClick={() => void wendeRematchAn()} disabled={busy !== null}>
+                    Vorschläge anwenden ({rematch.vorschlaege.length})
+                  </button>
+                </>
+              )}
+              {rematch.unklar.length > 0 && (
+                <>
+                  <p>Mehrdeutig (nicht automatisch übernommen):</p>
+                  {rematch.unklar.map((u) => (
+                    <p key={u.tmdb_id}>
+                      {u.tmdb_id} „{u.titel}“ ({u.jahr ?? "?"}): {u.kandidaten.map((k) => `${k.medientyp} ${k.id}`).join(", ")}
+                    </p>
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>

@@ -1,11 +1,12 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import { appendFileSync, mkdirSync } from "node:fs";
-import type { TmdbClient } from "../tmdb.js";
+import { TmdbError, type TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
 import { fetchKodiActorPhotos, fetchKodiBestand, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 import { klassifiziereAbgleich, type KodiBestand } from "../kodiAbgleich.js";
+import { klassifiziereRematch, type RematchTreffer } from "../tmdbRematch.js";
 
 /** Titel, die kein echter Filmtitel sind: leer oder der Kodi-Import-Platzhalter. */
 function istPlatzhalterTitel(titel: string | null): boolean {
@@ -534,7 +535,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       const rows = db
         .prepare(
           `SELECT tmdb_id, titel, medientyp, jahr, poster_url, overview, land, regisseure, autoren, "cast",
-                  tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten
+                  tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, tmdb_fehler
            FROM movies WHERE tmdb_id > 0`
         )
         .all()
@@ -557,6 +558,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
           tmdb_id: number; titel: string | null; medientyp: "film" | "serie"; jahr: number | null; poster_url: string | null; overview: string | null;
           land: string; regisseure: string; autoren: string; cast: string; tmdb_bewertung: number | null; tmdb_stimmen: number | null;
           imdb_bewertung: number | null; imdb_stimmen: number | null; laufzeit_minuten: number | null;
+          tmdb_fehler: string | null;
         }[];
       logEnrich({ event: "start", gesamt: rows.length, felder: [...selectedFields] });
 
@@ -622,10 +624,14 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             titel,
             row.tmdb_id
           );
+          if (row.tmdb_fehler === "404") db.prepare("UPDATE movies SET tmdb_fehler = NULL WHERE tmdb_id = ?").run(row.tmdb_id);
           enriched++;
           logEnrich({ event: "film", position: i, gesamt: rows.length, tmdb_id: row.tmdb_id, titel: row.titel?.trim() || "Unbekannter Titel", ergänzt: enriched });
         } catch (err) {
           const error = err instanceof Error ? err.message : "unbekannt";
+          if (err instanceof TmdbError && err.status === 404) {
+            db.prepare("UPDATE movies SET tmdb_fehler = '404' WHERE tmdb_id = ?").run(row.tmdb_id);
+          }
           failed.push({ tmdb_id: row.tmdb_id, error });
           logEnrich({ event: "error", position: i, tmdb_id: row.tmdb_id, titel: row.titel?.trim() || "Unbekannter Titel", error });
         }
@@ -767,6 +773,100 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         geloescht,
         uebersprungen_nutzerdaten: uebersprungen,
       });
+    })
+  );
+
+  /**
+   * Sucht für Filme, deren TMDB-ID nicht mehr existiert (tmdb_fehler = '404'),
+   * einen passenden Eintrag über Titel und Jahr — Filme und Serien.
+   * Liefert Vorschläge (Namensraum oder neue ID), unklare Fälle und erfolglose.
+   */
+  router.get(
+    "/tmdb-rematch",
+    asyncHandler(async (_req, res) => {
+      const eintraege = db
+        .prepare(
+          `SELECT m.tmdb_id, m.titel, m.jahr FROM movies m
+           JOIN collection c ON c.tmdb_id = m.tmdb_id
+           WHERE m.tmdb_id > 0 AND m.tmdb_fehler = '404' ORDER BY m.titel`
+        )
+        .all() as { tmdb_id: number; titel: string; jahr: number | null }[];
+
+      // Pro Titel nur einmal suchen
+      const nachTitel = new Map<string, RematchTreffer[]>();
+      for (const eintrag of eintraege) {
+        if (nachTitel.has(eintrag.titel)) continue;
+        try {
+          const gefunden = await tmdb.search(eintrag.titel);
+          nachTitel.set(
+            eintrag.titel,
+            gefunden.map((m) => ({ id: m.tmdb_id, titel: m.titel, jahr: m.jahr, medientyp: m.medientyp }))
+          );
+        } catch {
+          nachTitel.set(eintrag.titel, []);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+
+      res.json(klassifiziereRematch(eintraege, (e) => nachTitel.get(e.titel) ?? []));
+    })
+  );
+
+  /**
+   * Wendet ausgewählte Vorschläge an: gleiche ID → nur der medientyp,
+   * andere ID → Umzug inkl. Nutzerdaten. Nur für Einträge mit tmdb_fehler = '404'.
+   * body: { vorschlaege: [{ alt, neu, medientyp }] }
+   */
+  router.post(
+    "/tmdb-rematch",
+    asyncHandler(async (req, res) => {
+      const eingabe = (req.body ?? {}).vorschlaege;
+      const vorschlaege = Array.isArray(eingabe)
+        ? eingabe.filter(
+            (v): v is { alt: number; neu: number; medientyp: "film" | "serie" } =>
+              v !== null &&
+              typeof v === "object" &&
+              typeof (v as { alt?: unknown }).alt === "number" &&
+              Number.isInteger((v as { alt: number }).alt) &&
+              typeof (v as { neu?: unknown }).neu === "number" &&
+              Number.isInteger((v as { neu: number }).neu) &&
+              ((v as { medientyp?: unknown }).medientyp === "film" || (v as { medientyp?: unknown }).medientyp === "serie")
+          )
+        : [];
+      if (vorschlaege.length > 500) {
+        res.status(400).json({ error: "vorschlaege: max. 500 Einträge" });
+        return;
+      }
+
+      const istVeraltet = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ? AND tmdb_fehler = '404'");
+      const setzeTyp = db.prepare(
+        "UPDATE movies SET medientyp = ?, tmdb_fehler = NULL, zuletzt_aktualisiert = datetime('now') WHERE tmdb_id = ?"
+      );
+
+      const uebersprungen: number[] = [];
+      const typGeaendert: number[] = [];
+      const merges: { alt: number; neu: number }[] = [];
+      for (const v of vorschlaege) {
+        if (!istVeraltet.get(v.alt)) {
+          uebersprungen.push(v.alt);
+          continue;
+        }
+        if (v.alt === v.neu) {
+          setzeTyp.run(v.medientyp, v.alt);
+          typGeaendert.push(v.alt);
+        } else {
+          merges.push({ alt: v.alt, neu: v.neu });
+        }
+      }
+
+      const mergeErgebnis = merges.length > 0 ? fuehreFixesAus(merges) : [];
+      for (const ergebnis of mergeErgebnis) {
+        if (ergebnis.status !== "ok") continue;
+        const v = vorschlaege.find((x) => x.alt === ergebnis.alt);
+        if (v) setzeTyp.run(v.medientyp, ergebnis.neu);
+      }
+
+      res.json({ typ_geaendert: typGeaendert, merges: mergeErgebnis, uebersprungen });
     })
   );
 

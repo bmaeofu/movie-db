@@ -12,9 +12,26 @@ describe("Admin-Backfill", () => {
   let adminCookie: string;
   let benCookie: string;
   let enriched: boolean;
+  let suchTreffer: Record<string, { tmdb_id: number; titel: string; jahr: number; medientyp: "film" | "serie" }[]> = {};
 
   const fakeTmdb: TmdbClient = {
-    search: async () => [],
+    search: async (q: string) =>
+      (suchTreffer[q] ?? []).map((t) => ({
+        tmdb_id: t.tmdb_id,
+        titel: t.titel,
+        jahr: t.jahr,
+        medientyp: t.medientyp,
+        genres: [],
+        poster_url: null,
+        overview: null,
+        land: [],
+        regisseure: [],
+        autoren: [],
+        cast: [],
+        imdb_id: null,
+        tmdb_bewertung: null,
+        tmdb_stimmen: 0,
+      })),
     details: async (tmdbId: number, medientyp: "film" | "serie") => ({
       tmdb_id: tmdbId,
       titel: "Testfilm",
@@ -39,6 +56,7 @@ describe("Admin-Backfill", () => {
 
   beforeEach(async () => {
     enriched = false;
+    suchTreffer = {};
     db = createDb(":memory:");
     app = createApp(db, fakeTmdb, { omdb: fakeOmdb });
     const admin = await request(app).post("/api/auth/register").send({ name: "Anna", password: "geheim123" });
@@ -257,5 +275,44 @@ describe("Admin-Backfill", () => {
     };
     expect(JSON.parse(row.land)).toEqual(["Deutschland"]);
     expect(row.overview).toBeNull(); // Plot war nicht ausgewählt
+  });
+  it("tmdb-rematch: findet Namensraum- und ID-Vorschläge und wendet sie an", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast", tmdb_fehler)
+       VALUES (?, ?, ?, 'film', '[]', NULL, NULL, '{}', '[]', '[]', '[]', '[]', '404')`
+    );
+    einfuegen.run(900, "Serienfilm", 2000);
+    einfuegen.run(901, "Anders Titel", 1998);
+    einfuegen.run(902, "Nirgends", 1970);
+    for (const id of [900, 901, 902]) db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, 1)").run(id);
+
+    suchTreffer = {
+      Serienfilm: [{ tmdb_id: 900, titel: "Serienfilm", jahr: 2000, medientyp: "serie" }],
+      "Anders Titel": [{ tmdb_id: 5555, titel: "Anders Titel", jahr: 1998, medientyp: "film" }],
+      Nirgends: [],
+    };
+
+    const bericht = await request(app).get("/api/admin/tmdb-rematch").set("Cookie", adminCookie);
+    expect(bericht.status).toBe(200);
+    // nach Titel sortiert: "Anders Titel" vor "Serienfilm"
+    expect(bericht.body.vorschlaege).toEqual([
+      { alt: 901, neu: 5555, medientyp: "film", titel: "Anders Titel", jahr: 1998, art: "id" },
+      { alt: 900, neu: 900, medientyp: "serie", titel: "Serienfilm", jahr: 2000, art: "medientyp" },
+    ]);
+    expect(bericht.body.nichts.map((n: { tmdb_id: number }) => n.tmdb_id)).toEqual([902]);
+
+    const angewandt = await request(app)
+      .post("/api/admin/tmdb-rematch")
+      .set("Cookie", adminCookie)
+      .send({ vorschlaege: bericht.body.vorschlaege });
+    expect(angewandt.status).toBe(200);
+    expect(angewandt.body.typ_geaendert).toEqual([900]);
+    expect(angewandt.body.merges).toMatchObject([{ alt: 901, neu: 5555, status: "ok" }]);
+
+    const serie = db.prepare("SELECT medientyp, tmdb_fehler FROM movies WHERE tmdb_id = 900").get() as { medientyp: string; tmdb_fehler: string | null };
+    expect(serie).toEqual({ medientyp: "serie", tmdb_fehler: null });
+    expect(db.prepare("SELECT COUNT(*) n FROM movies WHERE tmdb_id = 901").get()).toEqual({ n: 0 });
+    const neu = db.prepare("SELECT medientyp, tmdb_fehler FROM movies WHERE tmdb_id = 5555").get() as { medientyp: string; tmdb_fehler: string | null };
+    expect(neu).toEqual({ medientyp: "film", tmdb_fehler: null });
   });
 });
