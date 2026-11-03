@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { klassifiziereRematch, type RematchEintrag, type RematchTreffer } from "../src/tmdbRematch.js";
+import { klassifiziereRematch, sammleVorschlaege, type RematchEintrag, type RematchTreffer } from "../src/tmdbRematch.js";
 
 function treffer(id: number, titel: string, jahr: number | null, medientyp: "film" | "serie" = "film"): RematchTreffer {
   return { id, titel, jahr, medientyp };
@@ -64,5 +64,24 @@ describe("TMDB-Neusuche: Klassifizierung", () => {
       8: [treffer(9, "Fluss des Lebens - Kwai", null)],
     }));
     expect(b.vorschlaege).toHaveLength(1);
+  });
+
+  it("sucht jeden Titel nur einmal und verkraftet Fehler", async () => {
+    const aufrufe: string[] = [];
+    const b = await sammleVorschlaege(
+      [
+        { tmdb_id: 1, titel: "Gleich", jahr: 2000 },
+        { tmdb_id: 2, titel: "Gleich", jahr: 2000 },
+        { tmdb_id: 3, titel: "Kaputt", jahr: 1990 },
+      ],
+      async (titel) => {
+        aufrufe.push(titel);
+        if (titel === "Kaputt") throw new Error("TMDB nicht erreichbar");
+        return [treffer(1, "Gleich", 2000)];
+      }
+    );
+    expect(aufrufe).toEqual(["Gleich", "Kaputt"]);
+    expect(b.vorschlaege.map((v) => v.alt)).toEqual([1, 2]);
+    expect(b.nichts.map((n) => n.tmdb_id)).toEqual([3]);
   });
 });

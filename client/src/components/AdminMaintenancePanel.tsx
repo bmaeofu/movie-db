@@ -24,6 +24,10 @@ const AKTIONEN: { key: Aktion; label: string; hinweis: string }[] = [
   { key: "dubletten", label: "Dubletten prüfen", hinweis: "Zeigt Filme, die mehrfach in der Sammlung liegen." },
 ];
 
+function anzahl(n: number, einzahl: string, mehrzahl: string): string {
+  return `${n} ${n === 1 ? einzahl : mehrzahl}`;
+}
+
 function fortschrittsText(zeile: unknown, wort = "aktualisiert"): string {
   const x = zeile as { status?: string; gesamt?: number; verarbeitet?: number; aktualisiert?: number; importiert?: number; error?: string };
   if (x.status === "start") return `läuft … ${x.gesamt ?? "?"} Einträge`;
@@ -60,11 +64,7 @@ export default function AdminMaintenancePanel() {
         setAbgleich(r);
         setMeldung(`${r.geprüft} Kodi-Einträge geprüft: ${r.vorhanden} vorhanden, ${r.merges.length} zusammenzuführen, ${r.waisen.length} löschbar, ${r.waisenMitNutzerdaten.length} mit Nutzerdaten`);
       } else if (aktion === "tmdb-rematch") {
-        const r = await api.tmdbRematch();
-        setRematch(r);
-        setMeldung(
-          `${r.geprüft} Einträge ohne gültige TMDB-ID: ${r.vorschlaege.length} Vorschläge, ${r.unklar.length} unklar, ${r.nichts.length} nicht gefunden`
-        );
+        setRematch(await api.tmdbRematch());
       } else if (aktion === "kodi-poster") {
         await api.kodiPoster((zeile) => setMeldung(fortschrittsText(zeile, "Poster aktualisiert")));
       } else if (aktion === "kodi-schauspieler") {
@@ -103,16 +103,23 @@ export default function AdminMaintenancePanel() {
     }
   }
 
-  async function wendeRematchAn() {
-    if (!rematch || rematch.vorschlaege.length === 0) return;
+  async function wendeRematchAn(nurNamensraum: boolean) {
+    if (!rematch) return;
+    const vorschlaege = nurNamensraum
+      ? rematch.vorschlaege.filter((v) => v.art === "medientyp")
+      : rematch.vorschlaege;
+    if (!nurNamensraum && vorschlaege.length === 0) return;
     setBusy("tmdb-rematch");
     try {
       const r = await api.tmdbRematchAnwenden(
-        rematch.vorschlaege.map((v) => ({ alt: v.alt, neu: v.neu, medientyp: v.medientyp }))
+        nurNamensraum
+          ? { nur_medientyp: true }
+          : { vorschlaege: vorschlaege.map((v) => ({ alt: v.alt, neu: v.neu, medientyp: v.medientyp })) }
       );
       const umgezogen = r.merges.filter((m) => m.status === "ok").length;
       setMeldung(
-        `übernommen: ${r.typ_geaendert.length} Medientyp-Korrekturen, ${umgezogen} Umzüge` +
+        `übernommen: ${anzahl(r.typ_geaendert.length, "Medientyp-Korrektur", "Medientyp-Korrekturen")}, ` +
+          anzahl(umgezogen, "Umzug", "Umzüge") +
           (r.uebersprungen.length > 0 ? `, ${r.uebersprungen.length} nicht mehr betroffen` : "")
       );
       setRematch(await api.tmdbRematch());
@@ -206,6 +213,11 @@ export default function AdminMaintenancePanel() {
       )}
       {rematch && (
         <div className="admin-meldung">
+          <p>
+            {anzahl(rematch.geprüft, "Eintrag", "Einträge")} ohne gültige TMDB-ID:{" "}
+            {anzahl(rematch.vorschlaege.length, "Vorschlag", "Vorschläge")}, {rematch.unklar.length} unklar,{" "}
+            {rematch.nichts.length} nicht gefunden
+          </p>
           {rematch.vorschlaege.length === 0 && rematch.unklar.length === 0 ? (
             <p>Keine passenden TMDB-Einträge gefunden.</p>
           ) : (
@@ -221,9 +233,18 @@ export default function AdminMaintenancePanel() {
                         : `Eintrag als ${v.medientyp === "serie" ? "Serie" : "Film"} übernehmen`}
                     </p>
                   ))}
-                  <button className="primary" onClick={() => void wendeRematchAn()} disabled={busy !== null}>
+                  <button className="primary" onClick={() => void wendeRematchAn(false)} disabled={busy !== null}>
                     Vorschläge anwenden ({rematch.vorschlaege.length})
                   </button>
+                  {rematch.vorschlaege.some((v) => v.art === "medientyp") && (
+                    <button
+                      onClick={() => void wendeRematchAn(true)}
+                      disabled={busy !== null}
+                      title="Nur Einträge, deren Nummer stimmt und die nur im falschen Namensraum liegen — ohne ID-Wechsel."
+                    >
+                      Nur Namensraum-Fixes ({rematch.vorschlaege.filter((v) => v.art === "medientyp").length})
+                    </button>
+                  )}
                 </>
               )}
               {rematch.unklar.length > 0 && (

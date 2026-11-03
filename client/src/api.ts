@@ -253,8 +253,10 @@ export const api = {
   kodiAbgleichBereinigen: (payload: { merges: { alt: number; neu: number }[]; deletes: number[] }) =>
     request<AbgleichErgebnis>("/api/admin/kodi-reconcile", { method: "POST", body: JSON.stringify(payload) }),
   tmdbRematch: () => request<RematchBericht>("/api/admin/tmdb-rematch"),
-  tmdbRematchAnwenden: (vorschlaege: { alt: number; neu: number; medientyp: string }[]) =>
-    request<RematchErgebnis>("/api/admin/tmdb-rematch", { method: "POST", body: JSON.stringify({ vorschlaege }) }),
+  tmdbRematchAnwenden: (payload: {
+    vorschlaege?: { alt: number; neu: number; medientyp: string }[];
+    nur_medientyp?: boolean;
+  }) => request<RematchErgebnis>("/api/admin/tmdb-rematch", { method: "POST", body: JSON.stringify(payload) }),
   addCustomMovie: (payload: {
     titel: string;
     jahr?: number | null;

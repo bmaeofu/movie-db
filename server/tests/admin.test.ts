@@ -315,4 +315,35 @@ describe("Admin-Backfill", () => {
     const neu = db.prepare("SELECT medientyp, tmdb_fehler FROM movies WHERE tmdb_id = 5555").get() as { medientyp: string; tmdb_fehler: string | null };
     expect(neu).toEqual({ medientyp: "film", tmdb_fehler: null });
   });
+
+  it("tmdb-rematch: nur_medientyp wendet ausschließlich Namensraum-Fixes an", async () => {
+    const einfuegen = db.prepare(
+      `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json, land, regisseure, autoren, "cast", tmdb_fehler)
+       VALUES (?, ?, ?, 'film', '[]', NULL, NULL, '{}', '[]', '[]', '[]', '[]', '404')`
+    );
+    einfuegen.run(800, "Serie im Filmraum", 2001);
+    einfuegen.run(801, "Umzugskandidat", 1999);
+    for (const id of [800, 801]) db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, 1)").run(id);
+
+    suchTreffer = {
+      "Serie im Filmraum": [{ tmdb_id: 800, titel: "Serie im Filmraum", jahr: 2001, medientyp: "serie" }],
+      Umzugskandidat: [{ tmdb_id: 9999, titel: "Umzugskandidat", jahr: 1999, medientyp: "film" }],
+    };
+
+    const r = await request(app).post("/api/admin/tmdb-rematch").set("Cookie", adminCookie).send({ nur_medientyp: true });
+    expect(r.status).toBe(200);
+    expect(r.body.typ_geaendert).toEqual([800]);
+    expect(r.body.merges).toEqual([]);
+
+    expect(db.prepare("SELECT medientyp, tmdb_fehler FROM movies WHERE tmdb_id = 800").get()).toEqual({
+      medientyp: "serie",
+      tmdb_fehler: null,
+    });
+    // Umzug bleibt unangetastet und weiter markiert
+    expect(db.prepare("SELECT tmdb_id, tmdb_fehler FROM movies WHERE tmdb_id = 801").get()).toEqual({
+      tmdb_id: 801,
+      tmdb_fehler: "404",
+    });
+    expect(db.prepare("SELECT COUNT(*) n FROM movies WHERE tmdb_id = 9999").get()).toEqual({ n: 0 });
+  });
 });

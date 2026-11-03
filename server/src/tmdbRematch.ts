@@ -40,6 +40,26 @@ export function normalisiereTitel(titel: string): string {
   return titel.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
 }
 
+/**
+ * Fragt für jeden Titel genau einmal und klassifiziert die Treffer.
+ * Der Aufrufer liefert die Suche, damit weder Netz noch TMDB-Client nötig sind.
+ */
+export async function sammleVorschlaege(
+  eintraege: RematchEintrag[],
+  suche: (titel: string) => Promise<RematchTreffer[]>
+): Promise<RematchBericht> {
+  const nachTitel = new Map<string, RematchTreffer[]>();
+  for (const eintrag of eintraege) {
+    if (nachTitel.has(eintrag.titel)) continue;
+    try {
+      nachTitel.set(eintrag.titel, await suche(eintrag.titel));
+    } catch {
+      nachTitel.set(eintrag.titel, []);
+    }
+  }
+  return klassifiziereRematch(eintraege, (e) => nachTitel.get(e.titel) ?? []);
+}
+
 export function klassifiziereRematch(
   eintraege: RematchEintrag[],
   kandidatenFuer: (eintrag: RematchEintrag) => RematchTreffer[]

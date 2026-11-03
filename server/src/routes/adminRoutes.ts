@@ -6,7 +6,7 @@ import type { OmdbClient } from "../omdb.js";
 import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
 import { fetchKodiActorPhotos, fetchKodiBestand, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 import { klassifiziereAbgleich, type KodiBestand } from "../kodiAbgleich.js";
-import { klassifiziereRematch, type RematchTreffer } from "../tmdbRematch.js";
+import { sammleVorschlaege, type RematchEintrag, type RematchTreffer } from "../tmdbRematch.js";
 
 /** Titel, die kein echter Filmtitel sind: leer oder der Kodi-Import-Platzhalter. */
 function istPlatzhalterTitel(titel: string | null): boolean {
@@ -781,34 +781,29 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
    * einen passenden Eintrag über Titel und Jahr — Filme und Serien.
    * Liefert Vorschläge (Namensraum oder neue ID), unklare Fälle und erfolglose.
    */
+  const veralteteEintraege = (): RematchEintrag[] =>
+    db
+      .prepare(
+        `SELECT m.tmdb_id, m.titel, m.jahr FROM movies m
+         JOIN collection c ON c.tmdb_id = m.tmdb_id
+         WHERE m.tmdb_id > 0 AND m.tmdb_fehler = '404' ORDER BY m.titel`
+      )
+      .all() as RematchEintrag[];
+
+  const rematchBericht = () =>
+    sammleVorschlaege(veralteteEintraege(), async (titel) => {
+      // TMDB erlaubt ~50 Anfragen/s; ein kurzer Abstand ist unauffällig genug
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const gefunden = await tmdb.search(titel);
+      return gefunden.map(
+        (m): RematchTreffer => ({ id: m.tmdb_id, titel: m.titel, jahr: m.jahr, medientyp: m.medientyp })
+      );
+    });
+
   router.get(
     "/tmdb-rematch",
     asyncHandler(async (_req, res) => {
-      const eintraege = db
-        .prepare(
-          `SELECT m.tmdb_id, m.titel, m.jahr FROM movies m
-           JOIN collection c ON c.tmdb_id = m.tmdb_id
-           WHERE m.tmdb_id > 0 AND m.tmdb_fehler = '404' ORDER BY m.titel`
-        )
-        .all() as { tmdb_id: number; titel: string; jahr: number | null }[];
-
-      // Pro Titel nur einmal suchen
-      const nachTitel = new Map<string, RematchTreffer[]>();
-      for (const eintrag of eintraege) {
-        if (nachTitel.has(eintrag.titel)) continue;
-        try {
-          const gefunden = await tmdb.search(eintrag.titel);
-          nachTitel.set(
-            eintrag.titel,
-            gefunden.map((m) => ({ id: m.tmdb_id, titel: m.titel, jahr: m.jahr, medientyp: m.medientyp }))
-          );
-        } catch {
-          nachTitel.set(eintrag.titel, []);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 120));
-      }
-
-      res.json(klassifiziereRematch(eintraege, (e) => nachTitel.get(e.titel) ?? []));
+      res.json(await rematchBericht());
     })
   );
 
@@ -820,7 +815,12 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
   router.post(
     "/tmdb-rematch",
     asyncHandler(async (req, res) => {
-      const eingabe = (req.body ?? {}).vorschlaege;
+      // nur_medientyp: die sichere Teilmenge selbst ermitteln und anwenden
+      // (gleiche ID, nur der Namensraum war falsch — kein Kodi-Abgleich nötig)
+      const nurMedientyp = (req.body ?? {}).nur_medientyp === true;
+      const eingabe = nurMedientyp
+        ? (await rematchBericht()).vorschlaege.filter((v) => v.alt === v.neu)
+        : (req.body ?? {}).vorschlaege;
       const vorschlaege = Array.isArray(eingabe)
         ? eingabe.filter(
             (v): v is { alt: number; neu: number; medientyp: "film" | "serie" } =>
