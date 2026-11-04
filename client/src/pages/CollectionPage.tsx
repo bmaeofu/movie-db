@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ENRICH_FELD_LABELS, type EnrichField, type Movie } from "../api";
 import MovieCard from "../components/MovieCard";
 import SearchModal from "../components/SearchModal";
 import MovieDetailModal from "../components/MovieDetailModal";
 
+const SEITENGROESSE = 60;
+
 export default function CollectionPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [ladend, setLadend] = useState(false);
   const [q, setQ] = useState("");
   const [text, setText] = useState("");
   const [genre, setGenre] = useState("");
@@ -23,11 +26,18 @@ export default function CollectionPage() {
   const [status, setStatus] = useState("");
   const [laufzeit, setLaufzeit] = useState("");
   const [sort, setSort] = useState("zuletzt_hinzugefuegt");
-  const [facets, setFacets] = useState<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>({
+  const [facets, setFacets] = useState<{
+    laender: string[];
+    regisseure: string[];
+    jahre: number[];
+    schauspieler: string[];
+    genres: string[];
+  }>({
     laender: [],
     regisseure: [],
     jahre: [],
     schauspieler: [],
+    genres: [],
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [pendingOpen, setPendingOpen] = useState<number | null>(null);
@@ -49,45 +59,66 @@ export default function CollectionPage() {
     laufzeit_absteigend: "Längste Laufzeit",
   };
 
-  const load = useCallback(async () => {
-    const filters: Record<string, string> = { sort };
-    if (q) filters.q = q;
-    if (text) filters.text = text;
-    if (genre) filters.genre = genre;
-    if (land) filters.land = land;
-    if (regisseur) filters.regisseur = regisseur;
-    if (schauspieler) filters.schauspieler = schauspieler;
-    if (jahr) filters.jahr = jahr;
-    if (tmdbWert === "<5") filters.tmdb_max = "5";
-    else if (tmdbWert) filters.tmdb_min = tmdbWert;
-    if (imdbWert === "<5") filters.imdb_max = "5";
-    else if (imdbWert) filters.imdb_min = imdbWert;
-    if (benutzerWert) filters.rating_min = benutzerWert;
-    if (laufzeit === "<15") filters.runtime_max = "15";
-    else if (laufzeit === "15-30") { filters.runtime_min = "15"; filters.runtime_max = "30"; }
-    else if (laufzeit === "30-60") { filters.runtime_min = "30"; filters.runtime_max = "60"; }
-    else if (laufzeit === "60-90") { filters.runtime_min = "60"; filters.runtime_max = "90"; }
-    else if (laufzeit === "90-120") { filters.runtime_min = "90"; filters.runtime_max = "120"; }
-    else if (laufzeit === "120-150") { filters.runtime_min = "120"; filters.runtime_max = "150"; }
-    else if (laufzeit === ">150") filters.runtime_min = "150";
-    if (medientyp) filters.medientyp = medientyp;
-    if (status) filters.status = status;
-    if (fehlt) filters.fehlt = fehlt;
-    const [fresh, c] = await Promise.all([api.collection(filters), api.count(filters)]);
-    setMovies(fresh);
-    setCount(c.count);
-    if (pendingOpen !== null) {
-      const m = fresh.find((x) => x.tmdb_id === pendingOpen);
-      if (m) setDetail(m);
-      setPendingOpen(null);
-    } else {
-      setDetail((d) => (d ? fresh.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
-    }
-  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort, pendingOpen, fehlt]);
+  // Alle Filter werden serverseitig ausgewertet; die Liste kommt seitenweise.
+  const filters = useMemo(() => {
+    const f: Record<string, string> = { sort };
+    if (q) f.q = q;
+    if (text) f.text = text;
+    if (genre) f.genre = genre;
+    if (land) f.land = land;
+    if (regisseur) f.regisseur = regisseur;
+    if (schauspieler) f.schauspieler = schauspieler;
+    if (jahr) f.jahr = jahr;
+    if (tmdbWert === "<5") f.tmdb_max = "5";
+    else if (tmdbWert) f.tmdb_min = tmdbWert;
+    if (imdbWert === "<5") f.imdb_max = "5";
+    else if (imdbWert) f.imdb_min = imdbWert;
+    if (benutzerWert) f.rating_min = benutzerWert;
+    if (laufzeit === "<15") f.runtime_max = "15";
+    else if (laufzeit === "15-30") { f.runtime_min = "15"; f.runtime_max = "30"; }
+    else if (laufzeit === "30-60") { f.runtime_min = "30"; f.runtime_max = "60"; }
+    else if (laufzeit === "60-90") { f.runtime_min = "60"; f.runtime_max = "90"; }
+    else if (laufzeit === "90-120") { f.runtime_min = "90"; f.runtime_max = "120"; }
+    else if (laufzeit === "120-150") { f.runtime_min = "120"; f.runtime_max = "150"; }
+    else if (laufzeit === ">150") f.runtime_min = "150";
+    if (medientyp) f.medientyp = medientyp;
+    if (status) f.status = status;
+    if (fehlt) f.fehlt = fehlt;
+    return f;
+  }, [q, text, genre, land, regisseur, schauspieler, jahr, tmdbWert, imdbWert, benutzerWert, medientyp, status, laufzeit, sort, fehlt]);
+  const filterKey = JSON.stringify(filters);
+
+  const ladeSeite = useCallback(
+    async (offset: number) => {
+      setLadend(true);
+      try {
+        const [frisch, c] = await Promise.all([
+          api.collection({ ...filters, limit: String(SEITENGROESSE), offset: String(offset) }),
+          offset === 0 ? api.count(filters) : Promise.resolve(null),
+        ]);
+        if (c) setCount(c.count);
+        setMovies((alt) => (offset === 0 ? frisch : [...alt, ...frisch]));
+      } catch {
+        if (offset === 0) setMovies([]);
+      } finally {
+        setLadend(false);
+      }
+    },
+    [filterKey]
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void ladeSeite(0);
+  }, [ladeSeite]);
+
+  // Nach dem Hinzufügen öffnen, sobald der Film auf der ersten Seite auftaucht
+  useEffect(() => {
+    if (pendingOpen === null) return;
+    const m = movies.find((x) => x.tmdb_id === pendingOpen);
+    if (!m) return;
+    setDetail(m);
+    setPendingOpen(null);
+  }, [movies, pendingOpen]);
 
   useEffect(() => {
     api.facets().then(setFacets).catch(() => {});
@@ -97,7 +128,15 @@ export default function CollectionPage() {
     api.count({}).then((c) => setTotal(c.count)).catch(() => {});
   }, []);
 
-  const genres = [...new Set(movies.flatMap((m) => m.genres))].sort();
+  const genres = facets.genres;
+
+  /** Nach einer Änderung am Film: den geladenen Bereich neu holen (ohne die Seite zu verlieren). */
+  async function aktualisiere() {
+    const limit = Math.min(Math.max(movies.length, SEITENGROESSE), 500);
+    const frisch = await api.collection({ ...filters, limit: String(limit), offset: "0" });
+    setMovies(frisch);
+    setDetail((d) => (d ? frisch.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
+  }
 
   function resetFilters() {
     if (fehlt) {
@@ -293,7 +332,8 @@ export default function CollectionPage() {
       </div>
 
       <p className="stat">
-        {count ?? "–"} von {total ?? "–"} Filmen · Sortierung: {SORT_LABELS[sort] ?? sort}
+        {count ?? "–"} von {total ?? "–"} Filmen · angezeigt: {movies.length} · Sortierung:{" "}
+        {SORT_LABELS[sort] ?? sort}
         {fehltFelder.length > 0 && (
           <span className="status-badge" style={{ marginLeft: "0.5rem" }}>
             Fehlt: {fehltFelder.map((f) => ENRICH_FELD_LABELS[f]).join(", ")}{" "}
@@ -311,8 +351,8 @@ export default function CollectionPage() {
         )}
       </p>
 
-      {movies.length === 0 ? (
-        <p className="empty">Noch keine Filme. Klick auf „+ Film hinzufügen“.</p>
+      {!ladend && movies.length === 0 ? (
+        <p className="empty">Keine Filme für diese Auswahl.</p>
       ) : (
         <div className="grid">
           {movies.map((m) => (
@@ -321,12 +361,20 @@ export default function CollectionPage() {
         </div>
       )}
 
+      {movies.length > 0 && movies.length < (count ?? 0) && (
+        <p className="stat">
+          <button onClick={() => void ladeSeite(movies.length)} disabled={ladend}>
+            {ladend ? "Lädt …" : `Weitere ${Math.min(SEITENGROESSE, (count ?? 0) - movies.length)} laden`}
+          </button>
+        </p>
+      )}
+
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onAdded={(id, titel) => handleAdded(id, titel)} />}
       {detail && (
         <MovieDetailModal
           movie={detail}
           onClose={() => setDetail(null)}
-          onChanged={() => void load()}
+          onChanged={() => void aktualisiere()}
           onSelectActor={(name) => {
             setSchauspieler(name);
             setSchauspielerInput(name);

@@ -273,7 +273,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   facets: () =>
-    request<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[] }>(
+    request<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[]; genres: string[] }>(
       "/api/collection/facets"
     ),
   actorImageUrl: (name: string) => `/api/actors/${encodeURIComponent(name)}/image`,

@@ -44,6 +44,30 @@ describe("Sammlung", () => {
     await request(app).post("/api/collection").set("Cookie", benCookie).send({ tmdb_id: 1399, medientyp: "serie" });
   });
 
+  it("paginiert mit limit/offset und liefert Gesamtgenre als Facette", async () => {
+    // 3 Filme in der Sammlung, sortiert nach Titel: Game of Thrones, Inception, Interstellar
+    const ersteSeite = await request(app)
+      .get("/api/collection?sort=titel&limit=2&offset=0")
+      .set("Cookie", annaCookie);
+    expect(ersteSeite.body.map((m: { titel: string }) => m.titel)).toEqual(["Game of Thrones", "Inception"]);
+
+    const zweiteSeite = await request(app)
+      .get("/api/collection?sort=titel&limit=2&offset=2")
+      .set("Cookie", annaCookie);
+    expect(zweiteSeite.body.map((m: { titel: string }) => m.titel)).toEqual(["Interstellar"]);
+
+    const ohneGrenze = await request(app).get("/api/collection?sort=titel").set("Cookie", annaCookie);
+    expect(ohneGrenze.body).toHaveLength(3);
+
+    const gesamt = await request(app).get("/api/collection/count?sort=titel").set("Cookie", annaCookie);
+    expect(gesamt.body.count).toBe(3);
+
+    await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 1234, medientyp: "film" });
+    await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 157336, medientyp: "film" });
+    const facets = await request(app).get("/api/collection/facets").set("Cookie", annaCookie);
+    expect(facets.body.genres).toEqual(expect.arrayContaining(["Action", "Drama", "Science Fiction"]));
+  });
+
   it("source: default 'user', 'kodi' erlaubt, ungültig → 400", async () => {
     const defaultSrc = await request(app).post("/api/collection").set("Cookie", annaCookie).send({ tmdb_id: 1234, medientyp: "film" });
     expect(defaultSrc.status).toBe(201);

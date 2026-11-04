@@ -34,6 +34,7 @@ export interface MovieView {
  * `fromSql` ersetzt die Quelle (z. B. `FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by`
  * oder `FROM list_items c JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = <added_by-Subquery>`),
  * `extraWhere`/`params` steuern Filter, `orderBy` die Sortierung.
+ * `seite` begrenzt das Ergebnis (LIMIT/OFFSET); ohne Angabe kommt alles zurück.
  */
 export function listMovieViews(
   db: Database.Database,
@@ -41,9 +42,11 @@ export function listMovieViews(
   fromSql: string,
   extraWhere: string[],
   params: Record<string, unknown>,
-  orderBy: string
+  orderBy: string,
+  seite?: { limit: number; offset: number }
 ): MovieView[] {
   const where = extraWhere.length ? "WHERE " + extraWhere.join(" AND ") : "";
+  const grenze = seite ? "LIMIT @limit OFFSET @offset" : "";
   const rows = db
     .prepare(
       `SELECT m.tmdb_id, m.titel, m.jahr, m.medientyp, m.genres, m.poster_url, m.overview,
@@ -62,9 +65,10 @@ export function listMovieViews(
        LEFT JOIN notes n ON n.tmdb_id = m.tmdb_id AND n.user_id = @userId
        ${where}
        GROUP BY m.tmdb_id
-       ORDER BY ${orderBy}`
+       ORDER BY ${orderBy}
+       ${grenze}`
     )
-    .all({ userId, ...params }) as any[];
+    .all({ userId, ...params, ...(seite ?? {}) }) as any[];
 
   return rows.map((r) => ({
     ...r,

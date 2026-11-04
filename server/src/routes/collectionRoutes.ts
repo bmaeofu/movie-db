@@ -347,13 +347,25 @@ export function createCollectionRouter(
         zuletzt_hinzugefuegt: "c.added_at DESC",
       };
 
+      // Seitengröße optional: ohne limit bleibt das Verhalten unverändert (alle Treffer)
+      const limitRoh = Number(req.query.limit);
+      const offsetRoh = Number(req.query.offset);
+      const seite =
+        Number.isInteger(limitRoh) && limitRoh > 0
+          ? {
+              limit: Math.min(limitRoh, 500),
+              offset: Number.isInteger(offsetRoh) && offsetRoh > 0 ? offsetRoh : 0,
+            }
+          : undefined;
+
       const rows = listMovieViews(
         db,
         userId,
         "FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by",
         where,
         params,
-        orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt
+        orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt,
+        seite
       );
       res.json(rows);
     })
@@ -380,27 +392,31 @@ export function createCollectionRouter(
   router.get(
     "/facets",
     asyncHandler(async (_req, res) => {
-      const rows = db.prepare('SELECT land, regisseure, jahr, "cast" FROM movies').all() as {
+      const rows = db.prepare('SELECT land, regisseure, jahr, genres, "cast" FROM movies').all() as {
         land: string;
         regisseure: string;
         jahr: number | null;
+        genres: string;
         cast: string;
       }[];
       const laender = new Set<string>();
       const regisseure = new Set<string>();
       const jahre = new Set<number>();
       const schauspieler = new Set<string>();
+      const genres = new Set<string>();
       for (const r of rows) {
         for (const l of JSON.parse(r.land) as string[]) laender.add(l);
         for (const d of JSON.parse(r.regisseure) as string[]) regisseure.add(d);
         if (r.jahr !== null) jahre.add(r.jahr);
         for (const c of JSON.parse(r.cast) as { name: string }[]) schauspieler.add(c.name);
+        for (const g of JSON.parse(r.genres) as string[]) genres.add(g);
       }
       res.json({
         laender: [...laender].sort(),
         regisseure: [...regisseure].sort(),
         jahre: [...jahre].sort((a, b) => b - a),
         schauspieler: [...schauspieler].sort(),
+        genres: [...genres].sort(),
       });
     })
   );
