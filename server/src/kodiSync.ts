@@ -334,9 +334,6 @@ export async function syncKodiMovies(
     );
     const inCollection = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
     const addCollection = db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)");
-    const markNeu = db.prepare(
-      "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users"
-    );
 
     // Bekannte IMDb-IDs: erkennt Filme, die unter einer anderen TMDB-ID schon in der Sammlung liegen
     const imdbZuTmdb = new Map<string, number>();
@@ -421,7 +418,6 @@ export async function syncKodiMovies(
           datei_pfade: JSON.stringify(pfadeByTmdb.get(row.tmdb_id) ?? []),
         });
         addCollection.run(tmdbId, admin);
-        markNeu.run(tmdbId);
         importierteFilme.push({ tmdb_id: tmdbId, titel: titelDesFilms });
         importiert++;
       }

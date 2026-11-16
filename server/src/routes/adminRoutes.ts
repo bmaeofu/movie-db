@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { TmdbError, type TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
-import { asyncHandler, AuthedRequest, requireAdmin, requireAuth } from "../middleware.js";
+import { asyncHandler, AuthedRequest, requireAdmin } from "../middleware.js";
 import { fetchKodiActorPhotos, fetchKodiBestand, fetchKodiPosters, syncKodiMovies, type KodiSyncConfig } from "../kodiSync.js";
 import { klassifiziereAbgleich, type KodiBestand } from "../kodiAbgleich.js";
 import { sammleVorschlaege, type RematchEintrag, type RematchTreffer } from "../tmdbRematch.js";
@@ -19,7 +19,7 @@ const ENRICH_LOG = "/data/logs/enrich.log";function logEnrich(event: Record<stri
 }
 export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?: OmdbClient): Router {
   const router = Router();
-  router.use(requireAuth(db), requireAdmin);
+  router.use(requireAdmin);
 
   /** Validiert {alt, neu}-Paare für TMDB-ID-Korrekturen. */
   function validiereFixes(input: unknown): { alt: number; neu: number }[] {
@@ -57,18 +57,6 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
     );
     const exists = db.prepare("SELECT 1 FROM movies WHERE tmdb_id = ?");
     const existsCol = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
-    const mvRatings = db.prepare(
-      "INSERT OR IGNORE INTO ratings (user_id, tmdb_id, sterne, updated_at) SELECT user_id, ?, sterne, updated_at FROM ratings WHERE tmdb_id = ?"
-    );
-    const delRatings = db.prepare("DELETE FROM ratings WHERE tmdb_id = ?");
-    const mvStatus = db.prepare(
-      "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT user_id, ?, status FROM watch_status WHERE tmdb_id = ?"
-    );
-    const delStatus = db.prepare("DELETE FROM watch_status WHERE tmdb_id = ?");
-    const mvNotes = db.prepare(
-      "INSERT OR IGNORE INTO notes (user_id, tmdb_id, text, updated_at) SELECT user_id, ?, text, updated_at FROM notes WHERE tmdb_id = ?"
-    );
-    const delNotes = db.prepare("DELETE FROM notes WHERE tmdb_id = ?");
     const mvList = db.prepare(
       "INSERT OR IGNORE INTO list_items (list_id, tmdb_id) SELECT list_id, ? FROM list_items WHERE tmdb_id = ?"
     );
@@ -94,12 +82,6 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         if (!merge) copyMovie.run({ neu: f.neu, alt: f.alt });
         else uebernehmeTitel.run({ neu: f.neu, alt: f.alt });
 
-        mvRatings.run(f.neu, f.alt);
-        delRatings.run(f.alt);
-        mvStatus.run(f.neu, f.alt);
-        delStatus.run(f.alt);
-        mvNotes.run(f.neu, f.alt);
-        delNotes.run(f.alt);
         mvList.run(f.neu, f.alt);
         delList.run(f.alt);
 
@@ -374,9 +356,6 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       );
       const inCollection = db.prepare("SELECT 1 FROM collection WHERE tmdb_id = ?");
       const addCollection = db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)");
-      const markNeu = db.prepare(
-        "INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users"
-      );
 
       const admin = (req as AuthedRequest).user.id;
 
@@ -408,7 +387,6 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
             laufzeit_minuten: m.laufzeit_minuten,
           });
           addCollection.run(m.tmdb_id, admin);
-          markNeu.run(m.tmdb_id);
           imported.push(m.tmdb_id);
         }
       });
@@ -696,10 +674,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
         .prepare(
           `SELECT m.tmdb_id, m.titel, m.jahr,
                   json_extract(m.tmdb_json, '$.imdb_id') AS imdb_id,
-                  (EXISTS (SELECT 1 FROM ratings r WHERE r.tmdb_id = m.tmdb_id)
-                   OR EXISTS (SELECT 1 FROM notes n WHERE n.tmdb_id = m.tmdb_id)
-                   OR EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = m.tmdb_id)
-                   OR EXISTS (SELECT 1 FROM watch_status ws WHERE ws.tmdb_id = m.tmdb_id AND ws.status <> 'neu')) AS nutzerdaten
+                  (EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = m.tmdb_id)) AS nutzerdaten
            FROM movies m JOIN collection c ON c.tmdb_id = m.tmdb_id
            WHERE m.source = 'kodi' AND m.tmdb_id > 0
            ORDER BY m.titel`
@@ -744,10 +719,7 @@ export function createAdminRouter(db: Database.Database, tmdb: TmdbClient, omdb?
       }
 
       const hatNutzerdaten = db.prepare(
-        `SELECT (EXISTS (SELECT 1 FROM ratings r WHERE r.tmdb_id = @id)
-              OR EXISTS (SELECT 1 FROM notes n WHERE n.tmdb_id = @id)
-              OR EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = @id)
-              OR EXISTS (SELECT 1 FROM watch_status ws WHERE ws.tmdb_id = @id AND ws.status <> 'neu')) AS n`
+        `SELECT (EXISTS (SELECT 1 FROM list_items li WHERE li.tmdb_id = @id)) AS n`
       );
       const delCol = db.prepare("DELETE FROM collection WHERE tmdb_id = ?");
       const delMovie = db.prepare("DELETE FROM movies WHERE tmdb_id = ?");

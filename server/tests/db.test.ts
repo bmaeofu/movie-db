@@ -11,7 +11,7 @@ describe("Datenbankschema", () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all()
       .map((r: any) => r.name);
-    for (const t of ["users", "movies", "collection", "ratings", "watch_status", "notes", "sessions", "lists", "list_items", "search_cache", "actors"]) {
+    for (const t of ["users", "movies", "collection", "lists", "list_items", "search_cache", "actors"]) {
       expect(tables).toContain(t);
     }
   });
@@ -32,25 +32,24 @@ describe("Datenbankschema", () => {
     }
   });
 
-  it("migriert watch_status-CHECK um 'neu' und erhält Bestandsdaten", () => {
-    const db = createDb(":memory:");
-    db.exec(`
-      DROP TABLE watch_status;
-      CREATE TABLE watch_status (
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-        status TEXT NOT NULL CHECK (status IN ('schauen','gesehen','kein_interesse')),
-        PRIMARY KEY (user_id, tmdb_id)
-      );
-    `);
-    const uid = Number(db.prepare("INSERT INTO users (name, password_hash) VALUES ('A', 'x')").run().lastInsertRowid);
-    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (1, 'X', 'film', '{}')").run();
-    db.prepare("INSERT INTO watch_status (user_id, tmdb_id, status) VALUES (?, 1, 'gesehen')").run(uid);
-    initSchema(db);
-    const row = db.prepare("SELECT status FROM watch_status WHERE user_id = ? AND tmdb_id = 1").get(uid) as { status: string };
-    expect(row.status).toBe("gesehen"); // Daten erhalten
-    db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (2, 'Y', 'film', '{}')").run();
-    expect(() => db.prepare("INSERT INTO watch_status (user_id, tmdb_id, status) VALUES (?, 2, 'neu')").run(uid)).not.toThrow();
+  it("migriert die Anbieter-Verknüpfung der Nutzer nach", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "fdb-migration-"));
+    const dbPath = path.join(dir, "test.db");
+    const dbAlt = createDb(dbPath);
+    dbAlt.prepare("INSERT INTO users (name, password_hash) VALUES ('Anna', '!')").run();
+    dbAlt.close();
+
+    const db = createDb(dbPath);
+    const spalten = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    expect(spalten.map((s) => s.name)).toContain("oidc_sub");
+    const indizes = db.prepare("PRAGMA index_list(users)").all() as { name: string; unique: number }[];
+    expect(indizes.find((i) => i.name === "users_oidc_sub")?.unique).toBe(1);
+
+    // Mehrere Nutzer ohne Anbieter-Verknüpfung sind erlaubt, doppelte Werte nicht
+    db.prepare("INSERT INTO users (name, password_hash) VALUES ('Ben', '!')").run();
+    expect(db.prepare("SELECT COUNT(*) n FROM users WHERE oidc_sub IS NULL").get()).toEqual({ n: 2 });
+    db.prepare("UPDATE users SET oidc_sub = 'sub-a' WHERE name = 'Anna'").run();
+    expect(() => db.prepare("UPDATE users SET oidc_sub = 'sub-a' WHERE name = 'Ben'").run()).toThrow(/UNIQUE/);
   });
 
   it("aktiviert WAL und Foreign Keys", () => {
@@ -69,8 +68,6 @@ describe("Datenbankschema", () => {
     expect(() =>
       db.prepare("INSERT INTO movies (tmdb_id, titel, medientyp, tmdb_json) VALUES (1, 'X', 'doku', '{}')").run()
     ).toThrow(/CHECK constraint failed/);
-    expect(() =>
-      db.prepare("INSERT INTO ratings (user_id, tmdb_id, sterne) VALUES (?, 27205, 6)").run(userId)
-    ).toThrow(/CHECK constraint failed/);
+    expect(userId).toBeGreaterThan(0);
   });
 });

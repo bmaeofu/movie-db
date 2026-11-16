@@ -34,32 +34,6 @@ export function initSchema(db: Database.Database): void {
       added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       added_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS ratings (
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-      sterne INTEGER NOT NULL CHECK (sterne BETWEEN 1 AND 5),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, tmdb_id)
-    );
-    CREATE TABLE IF NOT EXISTS watch_status (
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-      status TEXT NOT NULL CHECK (status IN ('neu','schauen','gesehen','kein_interesse')),
-      PRIMARY KEY (user_id, tmdb_id)
-    );
-    CREATE TABLE IF NOT EXISTS notes (
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-      text TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, tmdb_id)
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      expires_at INTEGER NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS lists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -95,24 +69,19 @@ export function initSchema(db: Database.Database): void {
   ensureColumn(db, "movies", "laufzeit_minuten", "laufzeit_minuten INTEGER");
   ensureColumn(db, "movies", "datei_pfade", "datei_pfade TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "movies", "tmdb_fehler", "tmdb_fehler TEXT");
-  // Migration: watch_status-CHECK um 'neu' erweitern (Bestands-DBs; SQLite kann CHECKs nicht per ALTER ändern)
-  const ws = db
-    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'watch_status'")
-    .get() as { sql: string } | undefined;
-  if (ws && ws.sql.includes("'kein_interesse'") && !ws.sql.includes("'neu'")) {
-    db.exec(`
-      ALTER TABLE watch_status RENAME TO watch_status_old;
-      CREATE TABLE watch_status (
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        tmdb_id INTEGER NOT NULL REFERENCES movies(tmdb_id) ON DELETE CASCADE,
-        status TEXT NOT NULL CHECK (status IN ('neu','schauen','gesehen','kein_interesse')),
-        PRIMARY KEY (user_id, tmdb_id)
-      );
-      INSERT INTO watch_status (user_id, tmdb_id, status)
-        SELECT user_id, tmdb_id, status FROM watch_status_old;
-      DROP TABLE watch_status_old;
-    `);
-  }
+  // Nutzerdaten (Bewertungen, Watch-Status, Notizen) liegen in der
+  // Hauptanwendung; hier bleiben nur die Stammdaten des Nutzers fuer Listen und
+  // `collection.added_by`, verknuepft ueber die Identitaet des Anbieters.
+  ensureColumn(db, "users", "oidc_sub", "oidc_sub TEXT");
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS users_oidc_sub ON users(oidc_sub)"
+  );
+  db.exec(`
+    DROP TABLE IF EXISTS ratings;
+    DROP TABLE IF EXISTS watch_status;
+    DROP TABLE IF EXISTS notes;
+    DROP TABLE IF EXISTS sessions;
+  `);
 }
 
 /** Fügt eine Spalte hinzu, falls sie fehlt (Migration für Bestands-DBs). */

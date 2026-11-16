@@ -80,6 +80,12 @@ export interface UserSummary extends User {
   created_at: string;
 }
 
+/** Was die Hauptanwendung an Marken zu einem Film kennt, nach TMDB-Kennung. */
+export interface UserData {
+  mine: Record<string, { rating: number | null; status: string | null; note: string | null }>;
+  ratings: Record<string, { avg: number | null; count: number }>;
+}
+
 export interface DuplikatEintrag {
   tmdb_id: number;
   titel: string;
@@ -191,13 +197,16 @@ async function leseNdjson(res: Response, onLine: (line: unknown) => void): Promi
   if (puffer.trim()) onLine(JSON.parse(puffer));
 }
 
+/** Die Filmdatenbank liegt unter /movie-db/ derselben Herkunft (Rahmen der Hauptanwendung). */
+const BASIS = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 async function adminStream(
   path: string,
   body: unknown,
   onLine: (line: unknown) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(path, {
+  const res = await fetch(BASIS + path, {
     method: "POST",
     credentials: "same-origin",
     signal,
@@ -209,7 +218,7 @@ async function adminStream(
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(BASIS + path, {
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     ...options,
@@ -221,17 +230,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  status: () => request<{ needsBootstrap: boolean }>("/api/auth/status"),
-  login: (name: string, password: string) => request<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ name, password }) }),
-  register: (name: string, password: string) => request<User>("/api/auth/register", { method: "POST", body: JSON.stringify({ name, password }) }),
-  changePassword: (altes_password: string, neues_password: string) =>
-    request<void>("/api/auth/password", { method: "PUT", body: JSON.stringify({ altes_password, neues_password }) }),
-  users: () => request<UserSummary[]>("/api/users"),
-  updateUser: (id: number, changes: { name?: string; password?: string; is_admin?: number }) =>
-    request<void>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(changes) }),
-  deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: "DELETE" }),
   me: () => request<User>("/api/auth/me"),
-  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   search: (q: string) => request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   collection: (filters: Record<string, string>) => request<Movie[]>("/api/collection?" + new URLSearchParams(filters).toString()),
   count: (filters: Record<string, string>) =>
@@ -276,15 +275,16 @@ export const api = {
     request<{ laender: string[]; regisseure: string[]; jahre: number[]; schauspieler: string[]; genres: string[] }>(
       "/api/collection/facets"
     ),
-  actorImageUrl: (name: string) => `/api/actors/${encodeURIComponent(name)}/image`,
+  actorImageUrl: (name: string) => `${BASIS}/api/actors/${encodeURIComponent(name)}/image`,
   removeFromCollection: (tmdbId: number) => request<void>(`/api/collection/${tmdbId}`, { method: "DELETE" }),
+  userData: () => request<UserData>("/api/me/user-data"),
   setRating: (tmdbId: number, sterne: number) =>
-    request<void>(`/api/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),
+    request<void>(`/api/me/movies/${tmdbId}/rating`, { method: "PUT", body: JSON.stringify({ sterne }) }),
   setWatchStatus: (tmdbId: number, status: string) =>
-    request<void>(`/api/movies/${tmdbId}/watch-status`, { method: "PUT", body: JSON.stringify({ status }) }),
+    request<void>(`/api/me/movies/${tmdbId}/watch-status`, { method: "PUT", body: JSON.stringify({ status }) }),
   setNote: (tmdbId: number, text: string) =>
-    request<void>(`/api/movies/${tmdbId}/note`, { method: "PUT", body: JSON.stringify({ text }) }),
-  deleteNote: (tmdbId: number) => request<void>(`/api/movies/${tmdbId}/note`, { method: "DELETE" }),
+    request<void>(`/api/me/movies/${tmdbId}/note`, { method: "PUT", body: JSON.stringify({ text }) }),
+  deleteNote: (tmdbId: number) => request<void>(`/api/me/movies/${tmdbId}/note`, { method: "DELETE" }),
   lists: () => request<ListSummary[]>("/api/lists"),
   createList: (name: string) => request<{ id: number; name: string }>("/api/lists", { method: "POST", body: JSON.stringify({ name }) }),
   renameList: (id: number, name: string) => request<void>(`/api/lists/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),

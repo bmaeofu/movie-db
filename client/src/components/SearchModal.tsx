@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type SearchResult } from "../api";
+import { assetUrl } from "../assets";
 
 export default function SearchModal({ onClose, onAdded }: { onClose: () => void; onAdded: (tmdbId: number, titel: string) => void }) {
   const [mode, setMode] = useState<"suche" | "manuell">("suche");
@@ -112,7 +113,7 @@ export default function SearchModal({ onClose, onAdded }: { onClose: () => void;
             <ul className="search-results">
               {results.map((r) => (
                 <li key={`${r.medientyp}-${r.tmdb_id}`}>
-                  {r.poster_url && <img src={r.poster_url} alt="" />}
+                  {r.poster_url && <img src={assetUrl(r.poster_url) ?? ""} alt="" />}
                   <div>
                     <strong>{r.titel}</strong> {r.jahr ? `(${r.jahr})` : ""} – {r.medientyp === "film" ? "Film" : "Serie"}
                   </div>

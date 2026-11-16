@@ -1,36 +1,38 @@
 import type { NextFunction, Request, Response } from "express";
 import type Database from "better-sqlite3";
-import { findSessionUser, SESSION_COOKIE } from "./sessions.js";
+import { ensureUser } from "./users.js";
 
 export interface AuthedRequest extends Request {
   user: { id: number; name: string; is_admin: number };
 }
 
-export function parseCookies(header?: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx === -1) continue;
-    try {
-      out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
-    } catch {
-      // ungültiges Prozent-Encoding: Cookie-Wert ignorieren
-    }
-  }
-  return out;
-}
-
-export function requireAuth(db: Database.Database) {
+/**
+ * Die Anmeldung passiert in der Hauptanwendung, die diesen Dienst nur über das
+ * interne Netz erreicht und die Identität als Kopfzeilen mitgibt. Ein Aufruf
+ * ohne `x-user-id` kommt nicht von dort und wird abgewiesen.
+ */
+export function requireTrustedUser(db: Database.Database) {
+  const adminGroup = (process.env.ADMIN_GROUP ?? "rc-timercontrol-admins").toLowerCase();
   return (req: Request, res: Response, next: NextFunction): void => {
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies[SESSION_COOKIE];
-    const user = token ? findSessionUser(db, token) : null;
-    if (!user) {
+    const id = String(req.header("x-user-id") ?? "").trim();
+    if (!id) {
       res.status(401).json({ error: "Nicht angemeldet" });
       return;
     }
-    (req as AuthedRequest).user = user;
+    const groups = String(req.header("x-user-groups") ?? "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+    (req as AuthedRequest).user = ensureUser(
+      db,
+      {
+        id,
+        name: String(req.header("x-user-name") ?? "").trim(),
+        email: String(req.header("x-user-email") ?? "").trim(),
+        groups,
+      },
+      groups.includes(adminGroup)
+    );
     next();
   };
 }

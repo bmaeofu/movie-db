@@ -3,11 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "./tmdb.js";
-import { createAuthRouter } from "./routes/authRoutes.js";
-import { createUserRouter } from "./routes/userRoutes.js";
 import { createAdminRouter } from "./routes/adminRoutes.js";
 import type { OmdbClient } from "./omdb.js";
-import { requireAuth } from "./middleware.js";
+import { AuthedRequest, requireTrustedUser } from "./middleware.js";
 import { createSearchRouter } from "./routes/searchRoutes.js";
 import { createCollectionRouter } from "./routes/collectionRoutes.js";
 import { createMovieRouter } from "./routes/movieRoutes.js";
@@ -25,9 +23,20 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json());
+  // Jede Anfrage kommt von der Hauptanwendung, die die Identität mitgibt; ein
+  // Aufruf ohne sie stammt nicht von dort. Der Datensatz entsteht beim ersten
+  // Kontakt, damit Listen und Sammlung einen Besitzer haben.
+  app.use(requireTrustedUser(db));
 
-  app.use("/api/auth", createAuthRouter(db));
-  app.use("/api/users", createUserRouter(db));
+  app.get("/api/auth/status", (_req, res) => {
+    res.json({ needsBootstrap: false });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json({ id: user.id, name: user.name, is_admin: user.is_admin });
+  });
+
   app.use("/api/admin", createAdminRouter(db, tmdb, options.omdb));
   app.use("/api/search", createSearchRouter(db, tmdb));
   const mediaDir = options.mediaDir ?? "/media";
@@ -40,7 +49,6 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   const BILD_ENDUNGEN = new Set([".jpg", ".jpeg", ".png", ".webp", ".tbn"]);
   app.use(
     "/media",
-    requireAuth(db),
     (req: Request, res: Response, next: NextFunction) => {
       const endung = path.extname(decodeURIComponent(req.path)).toLowerCase();
       if (!BILD_ENDUNGEN.has(endung)) {

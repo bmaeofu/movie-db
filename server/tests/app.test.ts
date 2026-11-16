@@ -7,6 +7,7 @@ import type Database from "better-sqlite3";
 import { createApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import type { TmdbClient } from "../src/tmdb.js";
+import { asUser } from "./helpers.js";
 
 const fakeTmdb: TmdbClient = {
   search: async () => [],
@@ -25,13 +26,17 @@ describe("App-Assembly", () => {
   });
 
   it("unbekannter API-Pfad → 404 als JSON", async () => {
-    const res = await request(app).get("/api/gibtsnicht");
+    const res = await request(app).get("/api/gibtsnicht").set(asUser());
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Unbekannter API-Endpunkt" });
   });
 
   it("kaputtes JSON → 400", async () => {
-    const res = await request(app).post("/api/auth/login").set("Content-Type", "application/json").send("{kaputt");
+    const res = await request(app)
+      .post("/api/collection")
+      .set(asUser())
+      .set("Content-Type", "application/json")
+      .send("{kaputt");
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Ungültiges JSON");
   });
@@ -42,6 +47,7 @@ describe("App-Assembly", () => {
     const spaApp = createApp(db, fakeTmdb, { clientDistDir: dist });
     return request(spaApp)
       .get("/")
+      .set(asUser())
       .expect(200)
       .expect("Content-Type", /html/)
       .expect((res) => {

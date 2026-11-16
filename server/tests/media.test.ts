@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { createApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import type { TmdbClient } from "../src/tmdb.js";
+import { asUser } from "./helpers.js";
 
 const fakeTmdb: TmdbClient = {
   search: async () => [],
@@ -33,9 +34,9 @@ const fakeTmdb: TmdbClient = {
 describe("Medien-Dateien", () => {
   let db: Database.Database;
   let app: Express;
-  let cookie: string;
+  let anna: Record<string, string>;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     const dir = mkdtempSync(join(tmpdir(), "media-"));
     mkdirSync(join(dir, "FilmeHD3"), { recursive: true });
     mkdirSync(join(dir, "KrimiHD"), { recursive: true });
@@ -45,30 +46,29 @@ describe("Medien-Dateien", () => {
 
     db = createDb(":memory:");
     app = createApp(db, fakeTmdb, { mediaDir: dir });
-    const admin = await request(app).post("/api/auth/register").send({ name: "Anna", password: "geheim123" });
-    cookie = admin.headers["set-cookie"][0].split(";")[0];
+    anna = asUser({ id: "sub-anna", name: "Anna" });
   });
 
   it("liefert Bilder nur mit gültiger Sitzung", async () => {
     expect((await request(app).get("/media/FilmeHD3/Film-poster.jpg")).status).toBe(401);
-    const mit = await request(app).get("/media/FilmeHD3/Film-poster.jpg").set("Cookie", cookie);
+    const mit = await request(app).get("/media/FilmeHD3/Film-poster.jpg").set(anna);
     expect(mit.status).toBe(200);
     expect(String(mit.body)).toBe("poster-inhalt");
   });
 
   it("liefert auch Bilder aus anderen Unterordnern", async () => {
-    const res = await request(app).get("/media/KrimiHD/Uhrwerk%20Orange-poster.jpg").set("Cookie", cookie);
+    const res = await request(app).get("/media/KrimiHD/Uhrwerk%20Orange-poster.jpg").set(anna);
     expect(res.status).toBe(200);
     expect(String(res.body)).toBe("krimi-poster");
   });
 
   it("liefert keine Videodateien aus", async () => {
-    const res = await request(app).get("/media/FilmeHD3/Film.mkv").set("Cookie", cookie);
+    const res = await request(app).get("/media/FilmeHD3/Film.mkv").set(anna);
     expect(res.status).toBe(404);
   });
 
   it("antwortet bei fehlender Datei mit 404 statt mit der SPA", async () => {
-    const res = await request(app).get("/media/FilmeHD3/GibtsNicht.jpg").set("Cookie", cookie);
+    const res = await request(app).get("/media/FilmeHD3/GibtsNicht.jpg").set(anna);
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Nicht gefunden" });
   });

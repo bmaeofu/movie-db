@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import type { ReactElement } from "react";
 import { AuthProvider, useAuth } from "./auth";
-import LoginPage from "./pages/LoginPage";
 import CollectionPage from "./pages/CollectionPage";
 import ListsPage from "./pages/ListsPage";
 import Header from "./components/Header";
@@ -9,16 +8,15 @@ import Header from "./components/Header";
 function RequireAuth({ children }: { children: ReactElement }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="page">Lädt…</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <p className="page">Bitte über die Hauptanwendung anmelden.</p>;
   return children;
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
           <Route
             path="/"
             element={

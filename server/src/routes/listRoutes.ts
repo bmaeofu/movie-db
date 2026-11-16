@@ -1,12 +1,11 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
+import { asyncHandler, AuthedRequest } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
 
 export function createListRouter(db: Database.Database): Router {
   const router = Router();
-  router.use(requireAuth(db));
-
+  
   function requireOwner(req: AuthedRequest, listId: number): boolean {
     const row = db.prepare("SELECT owner_id FROM lists WHERE id = ?").get(listId) as { owner_id: number } | undefined;
     if (!row) return false;

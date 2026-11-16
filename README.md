@@ -26,10 +26,16 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-## Erster Start
+## Anmeldung
 
-Beim ersten Aufruf wird der **erste Nutzer zum Admin** („Einrichtung starten").
-Weitere Nutzer legt der Admin über „Nutzer anlegen" an.
+Die Filmdatenbank hat keinen eigenen Login mehr. Sie läuft unter dem Rahmen der
+Hauptanwendung **Avior-Mediamanagement** (`/movie-db/`) und bekommt die Identität
+der angemeldeten Person als Kopfzeilen (`x-user-id`, `x-user-name`,
+`x-user-email`, `x-user-groups`); ein Datensatz entsteht beim ersten Aufruf.
+Bewertung, Watch-Status und Notizen liegen in der Hauptanwendung.
+
+Ein direkter Aufruf des Containers ohne diese Kopfzeilen antwortet mit 401 – das
+ist so gewollt.
 
 ## Entwicklung
 

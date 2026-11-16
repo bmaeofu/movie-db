@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ListSummary, type Movie } from "../api";
+import { assetUrl } from "../assets";
+import { withUserData } from "../userdata";
 
 export default function ListsPage() {
   const [lists, setLists] = useState<ListSummary[]>([]);
@@ -22,7 +24,7 @@ export default function ListsPage() {
       return;
     }
     setOpenList(id);
-    setItems((await api.listItems(id)).items);
+    setItems(await withUserData((await api.listItems(id)).items));
   }
 
   async function create(e: FormEvent) {
@@ -54,7 +56,7 @@ export default function ListsPage() {
   async function removeItem(tmdbId: number) {
     if (!openList) return;
     await api.removeFromList(openList, tmdbId);
-    setItems((await api.listItems(openList)).items);
+    setItems(await withUserData((await api.listItems(openList)).items));
   }
 
   return (
@@ -84,7 +86,7 @@ export default function ListsPage() {
               {items.map((m) => (
                 <div key={m.tmdb_id} className="card">
                   {m.poster_url ? (
-                    <img src={m.poster_url} alt={m.titel} loading="lazy" />
+                    <img src={assetUrl(m.poster_url) ?? ""} alt={m.titel} loading="lazy" />
                   ) : (
                     <div className="no-poster">{m.titel}</div>
                   )}

@@ -30,11 +30,13 @@ export interface MovieView {
 }
 
 /**
- * Movie-Select mit Nutzerdaten.
+ * Movie-Select ohne Nutzerdaten.
  * `fromSql` ersetzt die Quelle (z. B. `FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by`
  * oder `FROM list_items c JOIN movies m ON m.tmdb_id = c.tmdb_id JOIN users u ON u.id = <added_by-Subquery>`),
  * `extraWhere`/`params` steuern Filter, `orderBy` die Sortierung.
  * `seite` begrenzt das Ergebnis (LIMIT/OFFSET); ohne Angabe kommt alles zurück.
+ * Bewertung, Watch-Status und Notiz kommen aus der Hauptanwendung und werden
+ * dort ergänzt; `my_list_ids` bleibt hier, weil Listen hier liegen.
  */
 export function listMovieViews(
   db: Database.Database,
@@ -53,18 +55,11 @@ export function listMovieViews(
               m.land, m.regisseure, m.autoren, m."cast", m.tmdb_bewertung, m.tmdb_stimmen, m.imdb_bewertung, m.imdb_stimmen,
               m.laufzeit_minuten, json_extract(m.tmdb_json, '$.imdb_id') AS imdb_id, m.source,
               c.added_at, u.name AS added_by_name,
-              ROUND(AVG(r.sterne), 1) AS avg_rating, COUNT(r.user_id) AS rating_count,
-              (SELECT sterne FROM ratings WHERE tmdb_id = m.tmdb_id AND user_id = @userId) AS my_rating,
-              ws.status AS my_status, n.text AS my_note,
               (SELECT json_group_array(list_id) FROM list_items
                WHERE tmdb_id = m.tmdb_id
                  AND list_id IN (SELECT id FROM lists WHERE owner_id = @userId)) AS my_list_ids
        ${fromSql}
-       LEFT JOIN ratings r ON r.tmdb_id = m.tmdb_id
-       LEFT JOIN watch_status ws ON ws.tmdb_id = m.tmdb_id AND ws.user_id = @userId
-       LEFT JOIN notes n ON n.tmdb_id = m.tmdb_id AND n.user_id = @userId
        ${where}
-       GROUP BY m.tmdb_id
        ORDER BY ${orderBy}
        ${grenze}`
     )
@@ -78,7 +73,12 @@ export function listMovieViews(
     autoren: JSON.parse(r.autoren),
     cast: JSON.parse(r.cast),
     my_list_ids: r.my_list_ids ? JSON.parse(r.my_list_ids) : [],
-    my_rating: r.my_rating ?? null,
-    avg_rating: r.avg_rating ?? null,
+    // Die Marken ergänzt der Client aus der Hauptanwendung; bis dahin bleibt der
+    // Vertrag der Antwort unverändert.
+    my_rating: null,
+    my_status: null,
+    my_note: null,
+    avg_rating: null,
+    rating_count: 0,
   }));
 }

@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import type Database from "better-sqlite3";
 import { createApp } from "../src/app.js";
+import type { Express } from "express";
 import { createDb } from "../src/db.js";
 import type { TmdbClient } from "../src/tmdb.js";
+import { asUser } from "./helpers.js";
 
 const fakeTmdb: TmdbClient = {
   search: async () => [],
@@ -17,7 +19,7 @@ const fakeTmdb: TmdbClient = {
 
 describe("Actor-Bilder", () => {
   let db: Database.Database;
-  let app: ReturnType<typeof createApp>;
+  let app: Express;
 
   beforeEach(() => {
     db = createDb(":memory:");
@@ -26,7 +28,7 @@ describe("Actor-Bilder", () => {
 
   it("redirectet bei http(s)-Bildquellen", async () => {
     db.prepare("INSERT INTO actors (name, bild) VALUES ('Leo', 'https://image.tmdb.org/t/p/original/x.jpg')").run();
-    const res = await request(app).get("/api/actors/Leo/image");
+    const res = await request(app).get("/api/actors/Leo/image").set(asUser());
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("https://image.tmdb.org/t/p/original/x.jpg");
   });
@@ -36,15 +38,15 @@ describe("Actor-Bilder", () => {
     writeFileSync(path.join(dir, "test.jpg"), "bildinhalt");
     const spaApp = createApp(db, fakeTmdb, { mediaDir: dir });
     db.prepare("INSERT INTO actors (name, bild) VALUES ('Test Person', '/media/test.jpg')").run();
-    const res = await request(spaApp).get("/api/actors/Test%20Person/image");
+    const res = await request(spaApp).get("/api/actors/Test%20Person/image").set(asUser());
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("image/jpeg");
     expect(res.body.toString("utf8")).toBe("bildinhalt");
   });
 
   it("404 für unbekannte Schauspieler und unbekannte Bildquelle", async () => {
-    expect((await request(app).get("/api/actors/GibtsNicht/image")).status).toBe(404);
+    expect((await request(app).get("/api/actors/GibtsNicht/image").set(asUser())).status).toBe(404);
     db.prepare("INSERT INTO actors (name, bild) VALUES ('X', 'relativer-pfad')").run();
-    expect((await request(app).get("/api/actors/X/image")).status).toBe(404);
+    expect((await request(app).get("/api/actors/X/image").set(asUser())).status).toBe(404);
   });
 });

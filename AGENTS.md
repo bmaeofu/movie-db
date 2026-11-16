@@ -1,6 +1,6 @@
 # AGENTS.md – Filmdatenbank (movie-db)
 
-Gemeinsame Filmdatenbank für Familie/Freunde im Heimnetz: kuratierte Sammlung (TMDB-Suche + manuelle Einträge), Bewertungen (App-Durchschnitt, TMDB-, IMDb-Wert), Watch-Status, Notizen, persönliche Listen, Filter/Facetten, Passwort-Login. Deployment als Docker-Container auf unRAID via Komodo.
+Gemeinsame Filmdatenbank für Familie/Freunde im Heimnetz: kuratierte Sammlung (TMDB-Suche + manuelle Einträge), TMDB-/IMDb-Wert, persönliche Listen, Filter/Facetten. Läuft als Container im Stack der Hauptanwendung **Avior-Mediamanagement**; deren Anmeldung (lokal oder OIDC/authentik) ist die einzige, es gibt hier keinen Login. Bewertung, Watch-Status und Notizen gehören dem Konto und liegen in der Hauptanwendung.
 
 ## Stack & Struktur
 
@@ -29,28 +29,27 @@ npm run dev -w client          # Vite :5173, Proxy /api → :3000
 ## Datenmodell (wichtig für Änderungen)
 
 - **movies:** `tmdb_id` (PK; **Custom-Einträge = negative IDs**), `titel, jahr, medientyp('film'|'serie'), genres, poster_url, overview, land, regisseure, autoren, "cast" (JSON: {name, rolle}), tmdb_bewertung, tmdb_stimmen, imdb_bewertung, source('user'|'kodi'), tmdb_json, datei_pfade` (JSON: `/media/…`-Pfade der Mediendateien; vom Kodi-Sync gefüllt, mehrere pro Film möglich).
-- **watch_status.status:** `'neu' | 'schauen' | 'gesehen' | 'kein_interesse'` – `'neu'` wird beim Hinzufügen eines Films automatisch für ALLE Benutzer gesetzt (`INSERT OR IGNORE`), bestehende Status bleiben.
-- **users:** erster registrierter Nutzer = Admin; Admin kann User anlegen/umbenennen/Passwort zurücksetzen/löschen (Guards: letzter Admin unantastbar, kein Selbst-Löschen). Sessions in Tabelle `sessions` (Cookie `fdb_session`, HttpOnly, 30 Tage, Unix-Sekunden).
-- **FK-Kaskaden:** ratings/watch_status/notes/sessions/lists löschen mit dem User; `collection.added_by` → nullable + SET NULL.
+- **users:** nur noch Besitz-Marker für `lists.owner_id` und `collection.added_by`; `password_hash` steht auf `'!'`. Angelegt/verknüpft wird ein Datensatz beim ersten Aufruf über `ensureUser()` (`server/src/users.ts`): stabil über `oidc_sub` (Kopfzeile `x-user-id`), sonst über gleichen Namen oder gleichen Teil der E-Mail-Adresse vor dem @. `is_admin` folgt bei jedem Aufruf der Gruppe `ADMIN_GROUP`.
+- **Marken (Bewertung, Watch-Status, Notiz):** liegen NICHT mehr hier, sondern in der Hauptanwendung (`movie_user_data`: `username, tmdb_id, rating 1–5, status neu|schauen|gesehen|kein_interesse, note`). Diese App kennt nur `tmdb_id`; die Marken kommen per `GET /api/me/user-data` der Hauptanwendung und werden im Client zusammengeführt (`client/src/userdata.ts`).
+- **FK-Kaskaden:** `lists`/`list_items` löschen mit dem User; `collection.added_by` → nullable + SET NULL.
 
 ## SQLite-Gotchas
 
 - **`cast` ist ein SQL-Schlüsselwort** – die Spalte heißt `"cast"` und MUSS in SQL immer gequotet werden (`m."cast"`, `"cast" = …`); in JS-Objektzugriffen (`movie.cast`) normal.
-- CHECK-Constraints lassen sich nicht per `ALTER TABLE` ändern → Tabellen-Rebuild in `initSchema` (Muster: watch_status-'neu'-Migration).
+- `initSchema` löscht die alten Marken-Tabellen (`ratings`, `watch_status`, `notes`) und `sessions`; neue Spalten kommen über `ensureColumn`, `users.oidc_sub` hat einen Unique-Index (mehrere `NULL` sind erlaubt).
 - JSON-Spalten werden per `LIKE '%…%'` gefiltert (Facetten/Filter); `json_group_array` für Listen-IDs.
 
 ## API-Routen (Auswahl)
 
-- `/api/auth/*` (status, register [Bootstrap→Admin], login, logout, me, **password**)
-- `/api/users` (Admin: Liste, `PUT/DELETE /:id`)
+- `/api/auth/status` und `/api/auth/me` (nur noch Abfragen; kein Login, keine Nutzerverwaltung)
+- Jede Anfrage braucht die Kopfzeilen `x-user-id`, `x-user-name`, `x-user-email`, `x-user-groups` (vom Proxy der Hauptanwendung); ohne `x-user-id` → 401
 - `/api/admin/backfill` (Admin; `?force=1` = alle, `?omdb_limit=N` begrenzt OMDb-Aufrufe/Tag; reichert land/regisseure/autoren/cast/Bewertungen nach)
-- `/api/collection` (GET mit Filtern: `q, text, genre, land, regisseur, jahr, tmdb_min, imdb_min, medientyp, status, sort`; POST mit `{tmdb_id, medientyp, source?, tmdb_bewertung?, imdb_bewertung?}` + `?skip_omdb=1`; POST `/custom` für manuelle Einträge; GET `/facets` → `{laender, regisseure, jahre}`)
-- `/api/movies/:tmdbId/{rating|watch-status|note}` (UPSERTs)
+- `/api/collection` (GET mit Filtern: `q, text, genre, land, regisseur, jahr, tmdb_min, imdb_min, medientyp, sort`; Marken-Filter kommen als `ids`/`exclude_ids` und die Sortierung `bewertung` als `order_ids` vom Proxy, der sie aus den Marken der Hauptanwendung berechnet; POST mit `{tmdb_id, medientyp, source?, tmdb_bewertung?, imdb_bewertung?}` + `?skip_omdb=1`; POST `/custom` für manuelle Einträge; GET `/facets` → `{laender, regisseure, jahre}`)
 - `/api/movies/:tmdbId/play` (Wiedergabe-URLs aus `datei_pfade`; ohne gespeicherten Pfad Live-Abfrage der Kodi-DB; Ziele/Templates in `server/src/playback.ts`)
 
 ## Deployment (unRAID + Komodo)
 
-- `compose.yaml`: Service/Container **`movie-db`**, Host-Port **8080** → Container 3000, Env `${TMDB_API_KEY}` + `${OMDB_API_KEY}`, Bind-Mount `/mnt/user/appdata/movie-db:/data` (DB-Datei liegt dort), `restart: unless-stopped`, Multi-Stage-Dockerfile (node:20-slim, `npm ci`, build → runtime `npm ci --omit=dev`, `WORKDIR /app/server`, `CMD node dist/index.js`).
+- Deployment ist jetzt Teil des Stacks der Hauptanwendung: `compose.yaml` dort baut `./vendor/movie-db` als Submodule, Env `TMDB_API_KEY`, `OMDB_API_KEY`, `ADMIN_GROUP`, `MEDIA_DIR`, Bind-Mount `/mnt/user/appdata/avior_mediamanagement/movie-db:/data`, kein Host-Port (`expose 3000`); erreichbar nur über den Proxy unter `/movie-db/`. Das eigene `compose.yaml` dieses Repos bleibt für Standalone-Läufe.
 - `index.ts`: `TMDB_API_KEY` Pflicht (sonst exit 1); `OMDB_API_KEY` optional (nur damit läuft der OMDb-Client für IMDb-Werte).
 - Komodo-Stacks: Env-Variablen in den Stack-Einstellungen (nicht in .env); nach `git push` → Pull & Deploy.
 - Bekannte Fallen: „Resource is busy" beim Rebuild → `docker stop movie-db && docker rm movie-db`, dann `docker compose up -d --build --force-recreate`.
@@ -71,4 +70,4 @@ OMDb-Free-Tier: **1000 Anfragen/Tag**. Deshalb: Adds mit `?skip_omdb=1` bei Mass
 
 - Backend: `npm test` (aktuell 63 Tests) + `npx tsc -p server/tsconfig.json --noEmit`.
 - Frontend: `npm run build -w client`.
-- Live-Check gegen die laufende App: `http://192.168.178.75:8080/api/…` (Login z. B. roman / -none-).
+- Live-Check gegen die laufende App: `http://192.168.178.75:10015/movie-db/` (Anmeldung über Avior-Mediamanagement).

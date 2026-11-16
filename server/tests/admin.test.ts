@@ -2,15 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type Database from "better-sqlite3";
 import { createApp } from "../src/app.js";
+import type { Express } from "express";
 import { createDb } from "../src/db.js";
 import type { OmdbClient } from "../src/omdb.js";
 import type { TmdbClient } from "../src/tmdb.js";
+import { asAdmin, asUser } from "./helpers.js";
 
 describe("Admin-Backfill", () => {
   let db: Database.Database;
-  let app: ReturnType<typeof createApp>;
-  let adminCookie: string;
-  let benCookie: string;
+  let app: Express;
+  let admin: Record<string, string>;
+  let ben: Record<string, string>;
   let enriched: boolean;
   let suchTreffer: Record<string, { tmdb_id: number; titel: string; jahr: number; medientyp: "film" | "serie" }[]> = {};
 
@@ -59,23 +61,20 @@ describe("Admin-Backfill", () => {
     suchTreffer = {};
     db = createDb(":memory:");
     app = createApp(db, fakeTmdb, { omdb: fakeOmdb });
-    const admin = await request(app).post("/api/auth/register").send({ name: "Anna", password: "geheim123" });
-    adminCookie = admin.headers["set-cookie"][0].split(";")[0];
-    await request(app).post("/api/auth/register").set("Cookie", adminCookie).send({ name: "Ben", password: "benpass1" });
-    const benLogin = await request(app).post("/api/auth/login").send({ name: "Ben", password: "benpass1" });
-    benCookie = benLogin.headers["set-cookie"][0].split(";")[0];
-    await request(app).post("/api/collection").set("Cookie", adminCookie).send({ tmdb_id: 27205, medientyp: "film" });
-    await request(app).post("/api/collection/custom").set("Cookie", adminCookie).send({ titel: "Ohne TMDB", medientyp: "film" });
+    admin = asAdmin({ id: "sub-anna", name: "Anna" });
+    ben = asUser({ id: "sub-ben", name: "Ben" });
+    await request(app).post("/api/collection").set(admin).send({ tmdb_id: 27205, medientyp: "film" });
+    await request(app).post("/api/collection/custom").set(admin).send({ titel: "Ohne TMDB", medientyp: "film" });
   });
 
   it("401 ohne Session, 403 als Nicht-Admin", async () => {
     expect((await request(app).post("/api/admin/backfill")).status).toBe(401);
-    expect((await request(app).post("/api/admin/backfill").set("Cookie", benCookie)).status).toBe(403);
+    expect((await request(app).post("/api/admin/backfill").set(ben)).status).toBe(403);
   });
 
   it("reichert TMDB-Filme an, überspringt Custom-Einträge, idempotent", async () => {
     enriched = true;
-    const first = await request(app).post("/api/admin/backfill").set("Cookie", adminCookie);
+    const first = await request(app).post("/api/admin/backfill").set(admin);
     expect(first.status).toBe(200);
     expect(first.body.updated).toBe(1); // nur tmdb 27205, Custom (-1) übersprungen
     const row = db.prepare('SELECT land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id = 27205').get() as {
@@ -93,14 +92,14 @@ describe("Admin-Backfill", () => {
     expect(row.imdb_stimmen).toBe(12345);
     const custom = db.prepare("SELECT land FROM movies WHERE tmdb_id < 0").get() as { land: string };
     expect(JSON.parse(custom.land)).toEqual([]);
-    const second = await request(app).post("/api/admin/backfill").set("Cookie", adminCookie);
+    const second = await request(app).post("/api/admin/backfill").set(admin);
     expect(second.body.updated).toBe(0); // idempotent
   });
 
   it("omdb_limit begrenzt die OMDb-Aufrufe und erhält vorhandene IMDb-Werte", async () => {
     enriched = true;
     db.prepare("UPDATE movies SET imdb_bewertung = 6.6, imdb_stimmen = 42 WHERE tmdb_id = 27205").run();
-    const res = await request(app).post("/api/admin/backfill?omdb_limit=0").set("Cookie", adminCookie);
+    const res = await request(app).post("/api/admin/backfill?omdb_limit=0").set(admin);
     expect(res.status).toBe(200);
     expect(res.body.updated).toBe(1); // TMDB-Daten werden trotzdem angereichert
     const row = db.prepare('SELECT imdb_bewertung, imdb_stimmen FROM movies WHERE tmdb_id = 27205').get() as {
@@ -115,7 +114,7 @@ describe("Admin-Backfill", () => {
     enriched = true;
     const res = await request(app)
       .post("/api/collection?skip_omdb=1")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ tmdb_id: 157336, medientyp: "film" });
     expect(res.status).toBe(201);
     const row = db.prepare('SELECT imdb_bewertung FROM movies WHERE tmdb_id = 157336').get() as { imdb_bewertung: number | null };
@@ -138,9 +137,9 @@ describe("Admin-Backfill", () => {
     einfuegen.run(9007, "Es (Restzeile 2)", 1966, JSON.stringify({ imdb_id: "tt0059153" }));
     for (const id of [9001, 9002, 9003, 9004, 9005]) inSammlung.run(id);
 
-    expect((await request(app).get("/api/admin/duplicates").set("Cookie", benCookie)).status).toBe(403);
+    expect((await request(app).get("/api/admin/duplicates").set(ben)).status).toBe(403);
 
-    const res = await request(app).get("/api/admin/duplicates").set("Cookie", adminCookie);
+    const res = await request(app).get("/api/admin/duplicates").set(admin);
     expect(res.status).toBe(200);
     const imdbGruppe = res.body.imdb_gruppen.find((g: any) => g.imdb_id === "tt0059153");
     expect(imdbGruppe.eintraege.map((e: any) => e.tmdb_id).sort()).toEqual([9001, 9002]);
@@ -164,7 +163,7 @@ describe("Admin-Backfill", () => {
 
     const res = await request(app)
       .post("/api/admin/fix-tmdb-ids")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ fixes: [{ alt: 9101, neu: 9102 }] });
     expect(res.status).toBe(200);
     expect(res.body.fixes[0]).toMatchObject({ alt: 9101, neu: 9102, status: "ok", merge: true });
@@ -184,7 +183,7 @@ describe("Admin-Backfill", () => {
     db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9201, 1)").run();
     db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (9202, 1)").run();
 
-    await request(app).post("/api/admin/fix-tmdb-ids").set("Cookie", adminCookie).send({ fixes: [{ alt: 9201, neu: 9202 }] });
+    await request(app).post("/api/admin/fix-tmdb-ids").set(admin).send({ fixes: [{ alt: 9201, neu: 9202 }] });
     const ueberlebt = db.prepare("SELECT titel FROM movies WHERE tmdb_id = 9202").get() as { titel: string };
     expect(ueberlebt.titel).toBe("Richtiger Titel");
   });
@@ -203,7 +202,7 @@ describe("Admin-Backfill", () => {
 
     const res = await request(app)
       .post("/api/admin/enrich")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ fields: ["jahr"] })
       .buffer(true)
       .parse((response, callback) => {
@@ -224,7 +223,7 @@ describe("Admin-Backfill", () => {
   it("actors-Import: UPSERT und Validierung", async () => {
     const ok = await request(app)
       .post("/api/admin/actors")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({
         actors: [
           { name: "Leonardo DiCaprio", bild: "https://image.tmdb.org/t/p/original/x.jpg" },
@@ -235,12 +234,12 @@ describe("Admin-Backfill", () => {
     expect(ok.body.imported).toBe(2);
     const bad = await request(app)
       .post("/api/admin/actors")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ actors: [{ name: "X", bild: "javascript:alert(1)" }] });
     expect(bad.status).toBe(400);
     const nochmal = await request(app)
       .post("/api/admin/actors")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ actors: [{ name: "Leonardo DiCaprio", bild: "https://neu" }] });
     expect(nochmal.status).toBe(200);
     const row = db.prepare("SELECT bild FROM actors WHERE name = 'Leonardo DiCaprio'").get() as { bild: string };
@@ -251,7 +250,7 @@ describe("Admin-Backfill", () => {
     enriched = true;
     const res = await request(app)
       .post("/api/admin/enrich")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ fields: ["land"] })
       .buffer(true)
       .parse((response, callback) => {
@@ -292,7 +291,7 @@ describe("Admin-Backfill", () => {
       Nirgends: [],
     };
 
-    const bericht = await request(app).get("/api/admin/tmdb-rematch").set("Cookie", adminCookie);
+    const bericht = await request(app).get("/api/admin/tmdb-rematch").set(admin);
     expect(bericht.status).toBe(200);
     // nach Titel sortiert: "Anders Titel" vor "Serienfilm"
     expect(bericht.body.vorschlaege).toEqual([
@@ -303,7 +302,7 @@ describe("Admin-Backfill", () => {
 
     const angewandt = await request(app)
       .post("/api/admin/tmdb-rematch")
-      .set("Cookie", adminCookie)
+      .set(admin)
       .send({ vorschlaege: bericht.body.vorschlaege });
     expect(angewandt.status).toBe(200);
     expect(angewandt.body.typ_geaendert).toEqual([900]);
@@ -330,7 +329,7 @@ describe("Admin-Backfill", () => {
       Umzugskandidat: [{ tmdb_id: 9999, titel: "Umzugskandidat", jahr: 1999, medientyp: "film" }],
     };
 
-    const r = await request(app).post("/api/admin/tmdb-rematch").set("Cookie", adminCookie).send({ nur_medientyp: true });
+    const r = await request(app).post("/api/admin/tmdb-rematch").set(admin).send({ nur_medientyp: true });
     expect(r.status).toBe(200);
     expect(r.body.typ_geaendert).toEqual([800]);
     expect(r.body.merges).toEqual([]);

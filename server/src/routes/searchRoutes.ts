@@ -1,14 +1,13 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import type { TmdbClient } from "../tmdb.js";
-import { asyncHandler, requireAuth } from "../middleware.js";
+import { asyncHandler } from "../middleware.js";
 
 const SEARCH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function createSearchRouter(db: Database.Database, tmdb: TmdbClient): Router {
   const router = Router();
-  router.use(requireAuth(db));
-
+  
   router.get(
     "/",
     asyncHandler(async (req, res) => {

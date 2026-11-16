@@ -1,10 +1,11 @@
 import type { Movie } from "../api";
+import { assetUrl } from "../assets";
 
 export default function MovieCard({ movie, onClick }: { movie: Movie; onClick: () => void }) {
   return (
     <button className="card" onClick={onClick} aria-label={movie.titel}>
       {movie.poster_url ? (
-        <img src={movie.poster_url} alt={movie.titel} loading="lazy" />
+        <img src={assetUrl(movie.poster_url) ?? ""} alt={movie.titel} loading="lazy" />
       ) : (
         <div className="no-poster">{movie.titel}</div>
       )}

@@ -6,6 +6,7 @@ import { createApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { klassifiziereAbgleich, type AbgleichEintrag, type KodiBestand } from "../src/kodiAbgleich.js";
 import type { TmdbClient } from "../src/tmdb.js";
+import { asAdmin, asUser } from "./helpers.js";
 
 const fakeTmdb: TmdbClient = {
   search: async () => [],
@@ -66,7 +67,8 @@ describe("Kodi-Abgleich: Klassifizierung", () => {
 describe("Kodi-Abgleich: Bereinigung", () => {
   let db: Database.Database;
   let app: Express;
-  let cookie: string;
+  let admin: Record<string, string>;
+  let ben: Record<string, string>;
 
   function film(tmdbId: number, titel: string, mitNutzerdaten: boolean): void {
     db.prepare(
@@ -76,15 +78,20 @@ describe("Kodi-Abgleich: Bereinigung", () => {
     ).run(tmdbId, titel);
     db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, 1)").run(tmdbId);
     if (mitNutzerdaten) {
-      db.prepare("INSERT INTO ratings (user_id, tmdb_id, sterne) VALUES (1, ?, 4)").run(tmdbId);
+      // Nutzerdaten sind hier nur noch Listeneinträge; die Marken liegen in der Hauptanwendung.
+      const listId = Number(
+        db.prepare("INSERT INTO lists (owner_id, name) VALUES (1, ?)").run(`Liste ${tmdbId}`).lastInsertRowid
+      );
+      db.prepare("INSERT INTO list_items (list_id, tmdb_id) VALUES (?, ?)").run(listId, tmdbId);
     }
   }
 
-  beforeEach(async () => {
+  beforeEach(() => {
     db = createDb(":memory:");
     app = createApp(db, fakeTmdb);
-    const admin = await request(app).post("/api/auth/register").send({ name: "Anna", password: "geheim123" });
-    cookie = admin.headers["set-cookie"][0].split(";")[0];
+    admin = asAdmin({ id: "sub-anna", name: "Anna" });
+    ben = asUser({ id: "sub-ben", name: "Ben" });
+    db.prepare("INSERT INTO users (name, password_hash) VALUES ('Anna', '!')").run();
   });
 
   it("löscht Waisen ohne Nutzerdaten und überspringt Waisen mit Nutzerdaten", async () => {
@@ -93,7 +100,7 @@ describe("Kodi-Abgleich: Bereinigung", () => {
 
     const res = await request(app)
       .post("/api/admin/kodi-reconcile")
-      .set("Cookie", cookie)
+      .set(admin)
       .send({ deletes: [10, 11] });
 
     expect(res.status).toBe(200);
@@ -102,8 +109,8 @@ describe("Kodi-Abgleich: Bereinigung", () => {
 
     const uebrig = db.prepare("SELECT tmdb_id FROM movies ORDER BY tmdb_id").all() as { tmdb_id: number }[];
     expect(uebrig.map((r) => r.tmdb_id)).toEqual([11]);
-    const bewertung = db.prepare("SELECT COUNT(*) n FROM ratings WHERE tmdb_id = 11").get() as { n: number };
-    expect(bewertung.n).toBe(1);
+    const liste = db.prepare("SELECT COUNT(*) n FROM list_items WHERE tmdb_id = 11").get() as { n: number };
+    expect(liste.n).toBe(1);
   });
 
   it("führt Merges aus und meldet sie", async () => {
@@ -112,7 +119,7 @@ describe("Kodi-Abgleich: Bereinigung", () => {
 
     const res = await request(app)
       .post("/api/admin/kodi-reconcile")
-      .set("Cookie", cookie)
+      .set(admin)
       .send({ merges: [{ alt: 20, neu: 21 }] });
 
     expect(res.status).toBe(200);
@@ -122,10 +129,7 @@ describe("Kodi-Abgleich: Bereinigung", () => {
   });
 
   it("verlangt Adminrechte", async () => {
-    const ben = await request(app).post("/api/auth/register").set("Cookie", cookie).send({ name: "Ben", password: "geheim123" });
-    const benCookie = (await request(app).post("/api/auth/login").send({ name: "Ben", password: "geheim123" })).headers["set-cookie"][0].split(";")[0];
-    expect(ben.status).toBe(201);
     expect((await request(app).post("/api/admin/kodi-reconcile").send({ deletes: [10] })).status).toBe(401);
-    expect((await request(app).post("/api/admin/kodi-reconcile").set("Cookie", benCookie).send({ deletes: [10] })).status).toBe(403);
+    expect((await request(app).post("/api/admin/kodi-reconcile").set(ben).send({ deletes: [10] })).status).toBe(403);
   });
 });

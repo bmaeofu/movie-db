@@ -4,7 +4,7 @@ import path from "node:path";
 import type Database from "better-sqlite3";
 import { TmdbError, type TmdbClient } from "../tmdb.js";
 import type { OmdbClient } from "../omdb.js";
-import { asyncHandler, AuthedRequest, requireAuth } from "../middleware.js";
+import { asyncHandler, AuthedRequest } from "../middleware.js";
 import { listMovieViews } from "../queries.js";
 import { fetchKodiActorPhotos, fetchKodiPosters, type KodiSyncConfig } from "../kodiSync.js";
 
@@ -45,13 +45,15 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
   const jahrParam = typeof query.jahr === "string" ? query.jahr.trim() : "";
   const tmdbMin = Number(query.tmdb_min);
   const imdbMin = Number(query.imdb_min);
-  const ratingMin = Number(query.rating_min);
   const tmdbMax = Number(query.tmdb_max);
   const imdbMax = Number(query.imdb_max); 
   const runtimeMin = Number(query.runtime_min);
   const runtimeMax = Number(query.runtime_max);
   const medientyp = typeof query.medientyp === "string" ? query.medientyp : "";
-  const status = typeof query.status === "string" ? query.status : "";
+  // Die Hauptanwendung schickt die Treffer ihrer Marken-Filter als ID-Listen,
+  // weil Bewertungen, Watch-Status und Notizen dort liegen.
+  const ids = typeof query.ids === "string" ? query.ids.trim() : "";
+  const excludeIds = typeof query.exclude_ids === "string" ? query.exclude_ids.trim() : "";
   const fehltParam = typeof query.fehlt === "string" ? query.fehlt.trim() : "";
 
   const where: string[] = [];
@@ -95,10 +97,6 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
     where.push("m.imdb_bewertung >= @imdbMin");
     params.imdbMin = imdbMin;
   }
-  if (Number.isFinite(ratingMin) && ratingMin >= 1 && ratingMin <= 5) {
-    where.push("(SELECT AVG(rating.sterne) FROM ratings rating WHERE rating.tmdb_id = m.tmdb_id) >= @ratingMin");
-    params.ratingMin = ratingMin;
-  }
   if (Number.isFinite(tmdbMax) && tmdbMax >= 0 && tmdbMax <= 10) {
     where.push("m.tmdb_bewertung < @tmdbMax");
     params.tmdbMax = tmdbMax;
@@ -119,9 +117,13 @@ function buildFilter(query: Record<string, unknown>): { where: string[]; params:
     where.push("m.medientyp = @medientyp");
     params.medientyp = medientyp;
   }
-  if (status) {
-    where.push("ws.status = @status");
-    params.status = status;
+  if (ids) {
+    where.push("instr(@ids, ',' || m.tmdb_id || ',') > 0");
+    params.ids = `,${ids},`;
+  }
+  if (excludeIds) {
+    where.push("instr(@excludeIds, ',' || m.tmdb_id || ',') = 0");
+    params.excludeIds = `,${excludeIds},`;
   }
   // fehlt=jahr,overview → Filme, denen mindestens eines der Felder fehlt (wie die Enrich-Auswahl)
   if (fehltParam) {
@@ -141,8 +143,7 @@ export function createCollectionRouter(
   mediaDir?: string
 ): Router {
   const router = Router();
-  router.use(requireAuth(db));
-  const upsertMovie = db.prepare(
+    const upsertMovie = db.prepare(
     `INSERT INTO movies (tmdb_id, titel, jahr, medientyp, genres, poster_url, overview, tmdb_json,
                         land, regisseure, autoren, "cast", tmdb_bewertung, tmdb_stimmen, imdb_bewertung, imdb_stimmen, laufzeit_minuten, source)
      VALUES (@tmdb_id, @titel, @jahr, @medientyp, @genres, @poster_url, @overview, @tmdb_json,
@@ -227,7 +228,6 @@ export function createCollectionRouter(
       );
       db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(newId, user.id);
       // Neu aufgenommen → Status 'neu' für ALLE Benutzer
-      db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(newId);
       res.status(201).json({ message: "Zur Sammlung hinzugefügt", tmdb_id: newId });
     })
   );
@@ -321,7 +321,6 @@ export function createCollectionRouter(
         const user = (req as AuthedRequest).user;
         db.prepare("INSERT INTO collection (tmdb_id, added_by) VALUES (?, ?)").run(tmdb_id, user.id);
         // Neu aufgenommen → Status 'neu' für ALLE Benutzer
-        db.prepare("INSERT OR IGNORE INTO watch_status (user_id, tmdb_id, status) SELECT id, ?, 'neu' FROM users").run(tmdb_id);
         res.status(201).json({ message: "Zur Sammlung hinzugefügt" });
       } else {
         res.status(200).json({ message: "Ratings aktualisiert" });
@@ -341,7 +340,9 @@ export function createCollectionRouter(
         laufzeit_aufsteigend: "m.laufzeit_minuten IS NULL, m.laufzeit_minuten ASC",
         laufzeit_absteigend: "m.laufzeit_minuten IS NULL, m.laufzeit_minuten DESC",
         jahr: "m.jahr DESC",
-        bewertung: "avg_rating DESC",
+        bewertung:
+          "CASE WHEN instr(@orderIds, ',' || m.tmdb_id || ',') = 0 THEN 1 ELSE 0 END,"
+          + " instr(@orderIds, ',' || m.tmdb_id || ',')",
         tmdb_bewertung: "m.tmdb_bewertung DESC",
         imdb_bewertung: "m.imdb_bewertung DESC",
         zuletzt_hinzugefuegt: "c.added_at DESC",
@@ -358,13 +359,16 @@ export function createCollectionRouter(
             }
           : undefined;
 
+      const orderIds = typeof req.query.order_ids === "string" ? req.query.order_ids.trim() : "";
       const rows = listMovieViews(
         db,
         userId,
         "FROM collection c JOIN movies m ON m.tmdb_id = c.tmdb_id LEFT JOIN users u ON u.id = c.added_by",
         where,
-        params,
-        orderBy[sort] ?? orderBy.zuletzt_hinzugefuegt,
+        { ...params, orderIds: `,${orderIds},` },
+        (sort === "bewertung" && !orderIds
+          ? orderBy.zuletzt_hinzugefuegt
+          : orderBy[sort]) ?? orderBy.zuletzt_hinzugefuegt,
         seite
       );
       res.json(rows);
@@ -374,17 +378,15 @@ export function createCollectionRouter(
   router.get(
     "/count",
     asyncHandler(async (req, res) => {
-      const userId = (req as AuthedRequest).user.id;
       const { where, params } = buildFilter(req.query);
       const row = db
         .prepare(
           `SELECT COUNT(DISTINCT m.tmdb_id) AS n
            FROM collection c
            JOIN movies m ON m.tmdb_id = c.tmdb_id
-           LEFT JOIN watch_status ws ON ws.tmdb_id = c.tmdb_id AND ws.user_id = @userId
            ${where.length ? "WHERE " + where.join(" AND ") : ""}`
         )
-        .get({ userId, ...params }) as { n: number };
+        .get({ ...params }) as { n: number };
       res.json({ count: row.n });
     })
   );

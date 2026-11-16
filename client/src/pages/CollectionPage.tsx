@@ -4,6 +4,7 @@ import { api, ENRICH_FELD_LABELS, type EnrichField, type Movie } from "../api";
 import MovieCard from "../components/MovieCard";
 import SearchModal from "../components/SearchModal";
 import MovieDetailModal from "../components/MovieDetailModal";
+import { withUserData } from "../userdata";
 
 const SEITENGROESSE = 60;
 
@@ -97,7 +98,8 @@ export default function CollectionPage() {
           offset === 0 ? api.count(filters) : Promise.resolve(null),
         ]);
         if (c) setCount(c.count);
-        setMovies((alt) => (offset === 0 ? frisch : [...alt, ...frisch]));
+        const mit = await withUserData(frisch);
+        setMovies((alt) => (offset === 0 ? mit : [...alt, ...mit]));
       } catch {
         if (offset === 0) setMovies([]);
       } finally {
@@ -134,7 +136,7 @@ export default function CollectionPage() {
   async function aktualisiere() {
     const limit = Math.min(Math.max(movies.length, SEITENGROESSE), 500);
     const frisch = await api.collection({ ...filters, limit: String(limit), offset: "0" });
-    setMovies(frisch);
+    setMovies(await withUserData(frisch));
     setDetail((d) => (d ? frisch.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
   }
 
