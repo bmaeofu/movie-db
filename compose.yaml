@@ -1,7 +1,7 @@
 services:
   movie-db:
     build: .
-    container_name: movie-db
+    container_name: schieggs-movie-db
     ports:
       - "11000:3000"
     environment:
