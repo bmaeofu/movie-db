@@ -135,8 +135,10 @@ export default function CollectionPage() {
   /** Nach einer Änderung am Film: den geladenen Bereich neu holen (ohne die Seite zu verlieren). */
   async function aktualisiere() {
     const limit = Math.min(Math.max(movies.length, SEITENGROESSE), 500);
-    const frisch = await api.collection({ ...filters, limit: String(limit), offset: "0" });
-    setMovies(await withUserData(frisch));
+    const frisch = await withUserData(
+      await api.collection({ ...filters, limit: String(limit), offset: "0" })
+    );
+    setMovies(frisch);
     setDetail((d) => (d ? frisch.find((m) => m.tmdb_id === d.tmdb_id) ?? d : null));
   }
 
