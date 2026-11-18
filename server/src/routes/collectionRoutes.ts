@@ -376,6 +376,28 @@ export function createCollectionRouter(
   );
 
   router.get(
+    "/works",
+    asyncHandler(async (_req, res) => {
+      // Fuer die Hauptanwendung: welche Dateien zu welchem Film gehoeren. Sie
+      // ist der Proxy vor diesem Dienst und ruft mit den vertrauten Kopfzeilen.
+      const rows = db
+        .prepare(
+          `SELECT tmdb_id, titel, jahr, datei_pfade FROM movies
+           WHERE datei_pfade IS NOT NULL AND datei_pfade NOT IN ('', '[]')`
+        )
+        .all() as { tmdb_id: number; titel: string; jahr: number | null; datei_pfade: string }[];
+      res.json({
+        works: rows.map((row) => ({
+          tmdb_id: row.tmdb_id,
+          titel: row.titel,
+          jahr: row.jahr,
+          pfade: JSON.parse(row.datei_pfade) as string[],
+        })),
+      });
+    })
+  );
+
+  router.get(
     "/count",
     asyncHandler(async (req, res) => {
       const { where, params } = buildFilter(req.query);

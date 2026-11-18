@@ -317,6 +317,18 @@ describe("Sammlung", () => {
     expect(weg.body.map((m: any) => m.tmdb_id)).not.toContain(27205);
   });
 
+  it("nennt jedem Film seine Dateipfade", async () => {
+    // Der Kodi-Sync schreibt die Pfade; hier reicht ein Eintrag ueber die API.
+    db.prepare(
+      "UPDATE movies SET datei_pfade = ? WHERE tmdb_id = 27205"
+    ).run(JSON.stringify(["/media/tv/FilmeHD/Inception.mkv"]));
+    const res = await request(app).get("/api/collection/works").set(asUser());
+    expect(res.status).toBe(200);
+    const works = res.body.works as { tmdb_id: number; titel: string; pfade: string[] }[];
+    const inception = works.find((w) => w.tmdb_id === 27205);
+    expect(inception).toBeDefined();
+    expect(inception!.pfade).toEqual(["/media/tv/FilmeHD/Inception.mkv"]);
+  });
 });
 
 function db2App(db: Database.Database, fehler: unknown): Express {
@@ -328,3 +340,4 @@ function db2App(db: Database.Database, fehler: unknown): Express {
   };
   return createApp(db, fake);
 }
+

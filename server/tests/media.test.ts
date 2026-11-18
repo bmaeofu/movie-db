@@ -72,4 +72,18 @@ describe("Medien-Dateien", () => {
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Nicht gefunden" });
   });
+
+  it("findet ein Kodi-Poster unter dem Bibliotheks-Präfix", async () => {
+    // Kodi schreibt "/media/KrimiHD/…", im Container liegt es unter "/media/tv/…".
+    const praefix = mkdtempSync(join(tmpdir(), "media-prefix-"));
+    mkdirSync(join(praefix, "KrimiHD"), { recursive: true });
+    writeFileSync(join(praefix, "KrimiHD", "Uhrwerk Orange-poster.jpg"), "krimi-poster");
+    const mitPraefix = createApp(db, fakeTmdb, { mediaDir: join(praefix, "leer"), mediaPrefixes: [praefix] });
+    const res = await request(mitPraefix)
+      .get("/media/KrimiHD/Uhrwerk%20Orange-poster.jpg")
+      .set(anna);
+    expect(res.status).toBe(200);
+    expect(String(res.body)).toBe("krimi-poster");
+  });
 });
+

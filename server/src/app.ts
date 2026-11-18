@@ -17,6 +17,8 @@ export interface AppOptions {
   omdb?: OmdbClient;
   /** Basis-Ordner der gemounteten Medien (Read-only); Standard '/media' */
   mediaDir?: string;
+  /** Weitere Wurzeln, unter denen ein Kodi-Pfad liegen kann (Standard: MEDIA_PATH_PREFIX). */
+  mediaPrefixes?: string[];
 }
 
 export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppOptions = {}): Express {
@@ -47,19 +49,48 @@ export function createApp(db: Database.Database, tmdb: TmdbClient, options: AppO
   // Lokale Kodi-Poster (smb-Pfad → /media/…) aus dem gemounteten Medien-Ordner.
   // Nur mit Sitzung und nur Bilddateien – der Mount kann die gesamte Medienablage umfassen.
   const BILD_ENDUNGEN = new Set([".jpg", ".jpeg", ".png", ".webp", ".tbn"]);
+  // Kodi schreibt seine Pfade ab seiner Mount-Wurzel ("/media/KrimiHD/…"), im
+  // Container liegen dieselben Dateien unter einem anderen Präfix
+  // ("/media/tv/KrimiHD/…"). Ohne den Rückgriff fehlten die Poster der
+  // Kodi-Einträge, weil der direkte Pfad dort nicht existiert.
+  const medienPraefixe =
+    options.mediaPrefixes ??
+    (process.env.MEDIA_PATH_PREFIX ?? "/media/tv")
+    .split(",")
+    .map((eintrag) => eintrag.trim())
+    .filter(Boolean);
+
+  function medienDatei(angefordert: string): string | null {
+    const rest = angefordert.replace(/^\/+/, "");
+    const direkt = path.join(mediaDir, rest);
+    if (fs.existsSync(direkt)) return direkt;
+    for (const praefix of medienPraefixe) {
+      const kandidat = path.join(praefix, rest);
+      if (fs.existsSync(kandidat)) return kandidat;
+    }
+    return null;
+  }
+
   app.use(
     "/media",
     (req: Request, res: Response, next: NextFunction) => {
-      const endung = path.extname(decodeURIComponent(req.path)).toLowerCase();
-      if (!BILD_ENDUNGEN.has(endung)) {
+      let pfad = "";
+      try {
+        pfad = decodeURIComponent(req.path);
+      } catch {
         res.status(404).json({ error: "Nicht gefunden" });
         return;
       }
-      next();
-    },
-    express.static(mediaDir),
-    (_req: Request, res: Response) => {
-      res.status(404).json({ error: "Nicht gefunden" });
+      if (!BILD_ENDUNGEN.has(path.extname(pfad).toLowerCase())) {
+        res.status(404).json({ error: "Nicht gefunden" });
+        return;
+      }
+      const datei = medienDatei(pfad);
+      if (datei === null) {
+        res.status(404).json({ error: "Nicht gefunden" });
+        return;
+      }
+      res.sendFile(datei);
     }
   );
 
