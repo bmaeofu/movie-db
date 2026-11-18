@@ -3,8 +3,13 @@ import type Database from "better-sqlite3";
 import { asyncHandler } from "../middleware.js";
 import { fetchKodiDateien, kodiKonfigurationAusEnv } from "../kodiSync.js";
 import { bauePlayUrls } from "../playback.js";
+import { mediaPrefixes, resolveMediaFile } from "../media.js";
 
-export function createMovieRouter(db: Database.Database): Router {
+export function createMovieRouter(
+  db: Database.Database,
+  mediaDir = process.env.MEDIA_DIR ?? "/media",
+  prefixes: string[] = mediaPrefixes()
+): Router {
   const router = Router();
 
   router.get(
@@ -45,7 +50,12 @@ export function createMovieRouter(db: Database.Database): Router {
 
       res.json({
         tmdb_id: tmdbId,
-        dateien: pfade.map((pfad) => ({ pfad, ziele: bauePlayUrls(pfad) })),
+        dateien: pfade.map((pfad) => ({
+          // Ein Altbestand-Pfad ohne das Bibliotheks-Präfix wird für die
+          // Wiedergabe aufgelöst, damit der Player eine existierende Datei sieht.
+          pfad,
+          ziele: bauePlayUrls(resolveMediaFile(mediaDir, pfad, prefixes) ?? pfad),
+        })),
       });
     })
   );

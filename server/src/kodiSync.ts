@@ -36,8 +36,17 @@ interface KodiCastRow {
   rolle: string | null;
 }
 
-/** Kodi-Medienwurzeln, die im Container unter /media eingebunden sind (Host-Namen und IP-Schreibweise). */
-const SMB_WURZELN = ["smb://UMS/media/tv/", "smb://192.168.178.75/media/tv/"];
+/**
+ * Kodi-Medienwurzeln und der Pfad, unter dem dieselben Dateien im Container
+ * liegen. Die Wurzel mit "tv/" steht zuerst: Kodi schreibt seine Quelle so, und
+ * nur das laengere Praefix darf greifen.
+ */
+const SMB_WURZELN: [smb: string, container: string][] = [
+  ["smb://UMS/media/tv/", "/media/tv/"],
+  ["smb://192.168.178.75/media/tv/", "/media/tv/"],
+  ["smb://UMS/media/", "/media/"],
+  ["smb://192.168.178.75/media/", "/media/"],
+];
 
 /** Kodis Titelfeld ist bei manchen Filmen leer; dann den Dateinamen ohne Endung verwenden. */
 function kodiTitel(titel: string | null, datei: string | null): string {
@@ -58,10 +67,12 @@ function splitList(value: string | null): string[] {
 /** Kodi-SMB-Pfad → vom Frontend ladbarer /media-Pfad (nur innerhalb der eingebundenen Wurzeln). */
 export function posterUrl(smb: string | null): string | null {
   if (!smb) return null;
-  for (const wurzel of SMB_WURZELN) {
+  for (const [wurzel, container] of SMB_WURZELN) {
     if (!smb.startsWith(wurzel)) continue;
     const rel = smb.slice(wurzel.length);
-    return rel ? "/media/" + rel : null;
+    // Der Pfad bleibt so, wie Kodi ihn sieht - "tv/" gehoert dazu, sonst zeigt
+    // der Container auf einen Ordner, den es dort nicht gibt.
+    return rel ? container + rel : null;
   }
   return null;
 }

@@ -7,7 +7,7 @@ describe("Playback-URLs", () => {
   });
 
   it("bildet den Pfad je Ziel ab und setzt das Template ein", () => {
-    const ziele = bauePlayUrls("/media/FilmeHD3/Es.mkv");
+    const ziele = bauePlayUrls("/media/tv/FilmeHD3/Es.mkv");
     expect(ziele).toEqual([
       { name: "desktop", url: "dvbplay://192.168.178.75/media/tv/FilmeHD3/Es.mkv" },
       { name: "android", url: "intent://192.168.178.75/media/tv/FilmeHD3/Es.mkv#Intent;scheme=smb;package=org.videolan.vlc;end" },
@@ -15,7 +15,7 @@ describe("Playback-URLs", () => {
   });
 
   it("kodiert Leerzeichen", () => {
-    const ziele = bauePlayUrls("/media/FilmeHD3/Nobodys Fool.mkv");
+    const ziele = bauePlayUrls("/media/tv/FilmeHD3/Nobodys Fool.mkv");
     expect(ziele[0].url).toContain("Nobodys%20Fool.mkv");
     expect(ziele[1].url).toContain("Nobodys%20Fool.mkv");
   });

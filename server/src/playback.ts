@@ -17,12 +17,12 @@ export const PLAYBACK_ZIELE: PlaybackZiel[] = [
     name: "desktop",
     // URI-konform: host/pfad mit Schrägstrichen; der dvbplay-Handler macht daraus \\host\pfad
     template: "dvbplay://{{path}}",
-    path_map: { "/media": "192.168.178.75/media/tv" },
+    path_map: { "/media": "192.168.178.75/media" },
   },
   {
     name: "android",
     template: "intent://{{path}}#Intent;scheme=smb;package=org.videolan.vlc;end",
-    path_map: { "/media": "192.168.178.75/media/tv" },
+    path_map: { "/media": "192.168.178.75/media" },
   },
 ];
 

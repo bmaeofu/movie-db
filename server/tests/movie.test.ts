@@ -41,12 +41,12 @@ describe("Wiedergabe", () => {
 
   it("play: liefert Dateien mit Ziel-URLs, 404 ohne Mediathek-Eintrag", async () => {
     db.prepare("UPDATE movies SET datei_pfade = ? WHERE tmdb_id = 27205").run(
-      JSON.stringify(["/media/FilmeHD3/Inception.mkv"])
+      JSON.stringify(["/media/tv/FilmeHD3/Inception.mkv"])
     );
     const ok = await request(app).get("/api/movies/27205/play").set(anna);
     expect(ok.status).toBe(200);
     expect(ok.body.dateien).toHaveLength(1);
-    expect(ok.body.dateien[0].pfad).toBe("/media/FilmeHD3/Inception.mkv");
+    expect(ok.body.dateien[0].pfad).toBe("/media/tv/FilmeHD3/Inception.mkv");
     expect(ok.body.dateien[0].ziele.map((z: { name: string }) => z.name)).toEqual(["desktop", "android"]);
     expect(ok.body.dateien[0].ziele[1].url).toBe(
       "intent://192.168.178.75/media/tv/FilmeHD3/Inception.mkv#Intent;scheme=smb;package=org.videolan.vlc;end"

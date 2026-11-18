@@ -47,9 +47,14 @@ describe("Kodi-Sync", () => {
   let db: Database.Database;
 
   it("bildet Kodi-Posterpfade auf /media ab (mehrere Ordner und Hosts)", () => {
-    expect(posterUrl("smb://UMS/media/tv/FilmeHD3/Bild.jpg")).toBe("/media/FilmeHD3/Bild.jpg");
-    expect(posterUrl("smb://UMS/media/tv/KrimiHD/Uhrwerk Orange-poster.jpg")).toBe("/media/KrimiHD/Uhrwerk Orange-poster.jpg");
-    expect(posterUrl("smb://192.168.178.75/media/tv/DokHD/Bild.jpg")).toBe("/media/DokHD/Bild.jpg");
+    // Der Container-Pfad behaelt "tv/": dort liegt die Datei, nicht eine Ebene hoeher.
+    expect(posterUrl("smb://UMS/media/tv/FilmeHD3/Bild.jpg")).toBe("/media/tv/FilmeHD3/Bild.jpg");
+    expect(posterUrl("smb://UMS/media/tv/KrimiHD/Uhrwerk Orange-poster.jpg")).toBe(
+      "/media/tv/KrimiHD/Uhrwerk Orange-poster.jpg"
+    );
+    // Eine Quelle direkt unter der Freigabe bleibt ohne "tv/".
+    expect(posterUrl("smb://UMS/media/FilmeHD3/Bild.jpg")).toBe("/media/FilmeHD3/Bild.jpg");
+    expect(posterUrl("smb://192.168.178.75/media/tv/DokHD/Bild.jpg")).toBe("/media/tv/DokHD/Bild.jpg");
     expect(posterUrl("smb://192.168.178.60/media/tv/FilmeHD/Bild.jpg")).toBeNull();
     expect(posterUrl("https://image.tmdb.org/t/p/w342/x.jpg")).toBeNull();
     expect(posterUrl(null)).toBeNull();
@@ -134,7 +139,7 @@ describe("Kodi-Sync", () => {
     );
     expect(ergebnis.importiert).toBe(1);
     const row = db.prepare("SELECT datei_pfade FROM movies WHERE tmdb_id = 700").get() as { datei_pfade: string };
-    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/FilmeHD3/Film.mkv", "/media/FilmeHD3/Film (2_2).mkv"]);
+    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/tv/FilmeHD3/Film.mkv", "/media/tv/FilmeHD3/Film (2_2).mkv"]);
   });
 
   it("ergänzt Pfade auch bei Filmen, die schon in der Sammlung liegen", async () => {
@@ -149,7 +154,7 @@ describe("Kodi-Sync", () => {
       fakeVerbindung([kodiZeile(800, "Bestand", null, "Bestand.mkv", "smb://UMS/media/tv/FilmeHD2/Bestand.mkv")])
     );
     const row = db.prepare("SELECT datei_pfade FROM movies WHERE tmdb_id = 800").get() as { datei_pfade: string };
-    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/FilmeHD2/Bestand.mkv"]);
+    expect(JSON.parse(row.datei_pfade)).toEqual(["/media/tv/FilmeHD2/Bestand.mkv"]);
   });
 
   it("überspringt Kodi-Filme ohne IMDb-ID nicht fälschlich", async () => {
